@@ -10,14 +10,26 @@ Esta primera versión es un prototipo local para validar que cuidar y jugar con 
 
 - Una mascota inicial llamada Nubi, con nombre editable y apariencia procedural reproducible.
 - Cuatro necesidades: saciedad, energía, higiene y ánimo.
-- Acciones de alimentar, limpiar, descansar y acariciar.
-- Vínculo, experiencia, nivel y monedas dentro de una economía local de prueba.
+- Un refugio que ocupa el área de juego, con paseo e interacción directa con la mascota.
+- Herramientas de caricias, comida, burbujas y siesta: se seleccionan y se usan sobre la criatura; también se pueden arrastrar.
 - Bosque, costa y tundra disponibles como biomas de demostración.
 - Un minijuego de recoger luciérnagas durante 20 segundos.
 - Guardado automático en el navegador y cálculo limitado del tiempo transcurrido al volver.
-- Interfaz en español, adaptable a pantallas pequeñas y con controles táctiles.
+- Interfaz en español, adaptable a móvil, con controles táctiles y de teclado; bienestar, vínculo y experiencia en una ficha a demanda.
 
 El guardado pertenece a este navegador y dispositivo. Borrar los datos del navegador elimina la partida. La economía local puede modificarse desde el propio equipo y todavía no sirve como base de un modo competitivo.
+
+## Cómo jugar
+
+- Toca o haz clic en el suelo para que tu mascota camine hacia ese lugar.
+- Elige Caricias, Comida, Burbujas o Siesta y toca a la mascota para usar la herramienta. Elegirla no consume semillas; dar de comer cuesta 5 semillas.
+- También puedes llevar una herramienta desde la barra hasta la mascota mediante arrastre. En táctil siempre puedes seleccionar y tocar.
+- Pulsa el nombre de tu compañero para consultar cómo está o cambiar su nombre.
+- Explora otros biomas desde el indicador del lugar o el letrero del sendero. El acceso de luciérnagas y el botón Jugar abren el minijuego.
+- El menú reúne la bitácora de esta sesión y el próximo capítulo de comunidad.
+- Con teclado, 1–4 seleccionan herramientas y las flechas indican un destino. Tab y Enter permiten recorrer y activar los controles, incluida la mascota.
+
+Las partidas de la primera versión se conservan: el rediseño usa el mismo esquema `xisverso.save.v1`. La mascota empieza cada sesión en el centro del refugio; su identidad, nombre, necesidades y progreso permanecen guardados.
 
 ## Ejecutar con PowerShell
 
@@ -60,9 +72,9 @@ Tecnologías: TypeScript, Vite, Canvas 2D y APIs del navegador. La simulación e
 npm.cmd run test:e2e
 ```
 
-Detén antes el servidor de desarrollo con Ctrl+C: las pruebas utilizan el mismo puerto local 4173. Las pruebas usan una instancia aislada de Google Chrome sin ventana, lanzada desde PowerShell. No usan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado; la compilación y las pruebas de simulación no necesitan navegador.
+Las pruebas utilizan el puerto local 4174, separado del servidor de desarrollo 4173. Las pruebas usan una instancia aislada de Google Chrome sin ventana, lanzada desde PowerShell. No usan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado; la compilación y las pruebas de simulación no necesitan navegador.
 
-Cubren cuidados, cambio de nombre, persistencia al recargar, los biomas, navegación móvil, teclado, finalización y abandono del minijuego, guardados dañados, almacenamiento bloqueado y sincronización entre pestañas. Las capturas se generan en `artifacts/`, que no se versiona.
+Cubren selección y uso de herramientas sobre la mascota, desplazamiento sin gastos, arrastre, cambio de nombre, partidas anteriores v1, biomas, tamaños móviles, teclado, finalización y abandono del minijuego, guardados dañados, almacenamiento bloqueado y sincronización entre pestañas. Las capturas se generan en `artifacts/`, que no se versiona.
 
 También puedes iniciar el proyecto con `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`. El parámetro de ejecución se aplica solo a ese proceso, sin cambiar la configuración del sistema.
 

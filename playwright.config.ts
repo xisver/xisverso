@@ -7,7 +7,7 @@ export default defineConfig({
   reporter: 'list',
   timeout: 40000,
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:4174',
     channel: 'chrome',
     headless: true,
     trace: 'retain-on-failure',
@@ -19,8 +19,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm.cmd run dev -- --port 4173 --strictPort',
-    url: 'http://127.0.0.1:4173',
+    command: 'npm.cmd run dev -- --port 4174 --strictPort',
+    url: 'http://127.0.0.1:4174',
     reuseExistingServer: false,
     timeout: 20000,
   },

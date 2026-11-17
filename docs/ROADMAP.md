@@ -35,4 +35,12 @@ Reproducción, intercambio de criaturas, economía entre usuarios, mundo masivo 
 
 Los hitos 1 y 2 están implementados como prototipo local: una mascota procedural, cuidados, guardado, tres biomas de demostración y el minijuego. La base local está preparada; la creación y subida del repositorio remoto depende de completar la autenticación de GitHub CLI. Los hitos 3–7 siguen pendientes.
 
-La verificación inicial incluye 13 pruebas de simulación y 7 pruebas de flujos de interfaz. El flujo de GitHub Actions está configurado para comprobar simulación y compilación cuando el repositorio se publique; todavía no se ha ejecutado remotamente.
+La verificación inicial incluyó 13 pruebas de simulación y 7 pruebas de flujos de interfaz. El flujo de GitHub Actions está configurado para comprobar simulación y compilación cuando el repositorio se publique; todavía no se ha ejecutado remotamente.
+
+## Refugio interactivo
+
+La experiencia principal ahora es un mundo a pantalla completa: tocar el suelo hace caminar a la mascota y las herramientas se usan directamente sobre ella. Comida, burbujas y caricias también admiten arrastre. Los viajes, la bitácora y el bienestar se consultan en diálogos a demanda; la partida conserva el esquema v1.
+
+Antes de ampliar el número de mascotas, validar que el paseo, los gestos y las señales de necesidad resulten claros y agradables. La siguiente evolución puede incorporar objetos utilizables del entorno y pequeñas actividades dentro del propio refugio.
+
+Verificación del refugio: 13 pruebas de simulación y 12 de interacción, incluyendo arrastre, partidas anteriores, móvil vertical, pantalla horizontal y movimiento reducido.

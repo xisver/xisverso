@@ -22,6 +22,14 @@ Referencias técnicas primarias:
 - [Animación en Canvas — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Basic_animations)
 - [Movimiento reducido — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion)
 
+## Jugar dentro del refugio
+
+La escena es la pantalla principal. Interactuar significa tocar el suelo para caminar, elegir una herramienta y usarla sobre la mascota, o acercar la herramienta mediante arrastre. La selección por sí sola no consume recursos.
+
+Los valores numéricos de bienestar y progreso se consultan cuando hacen falta. Los gestos, el movimiento, los pensamientos y las reacciones de la criatura transmiten su presencia durante el juego. Ratón, tacto y teclado deben ofrecer caminos equivalentes para los cuidados.
+
+El rediseño conserva el guardado `xisverso.save.v1`. La posición de paseo y la herramienta actual son estado visual de sesión; no cambian el progreso guardado ni requieren migrar partidas existentes.
+
 ## Cuidado amable
 
 Usar cuatro necesidades con escala de 0 a 100: saciedad, energía, higiene y ánimo. El abandono temporal no provoca muerte permanente. Limitar el deterioro por ausencia para permitir regresar a una partida recuperable.

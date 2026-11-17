@@ -6,6 +6,11 @@ export interface ScenePet {
   sleeping: boolean;
 }
 
+export type SceneTool = 'hand' | 'feed' | 'clean' | 'rest';
+export interface SceneOptions {
+  onPetInteract?: (tool: SceneTool) => void;
+  onWalk?: (x: number, y: number) => void;
+}
 type Reaction = 'feed' | 'clean' | 'rest' | 'pet' | 'win';
 type Particle = {
   x: number;
@@ -33,10 +38,14 @@ function seeded(seed: number): () => number {
 export function createScene(
   canvas: HTMLCanvasElement,
   initial: ScenePet,
+  options: SceneOptions = {},
 ): {
   update(pet: ScenePet): void;
   react(action: Reaction): void;
   destroy(): void;
+  setTool(tool: SceneTool): void;
+  walkTo(x: number, y: number): void;
+  getPetPosition(): { x: number; y: number };
 } {
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Tu navegador necesita Canvas 2D para mostrar la mascota.');
@@ -50,6 +59,15 @@ export function createScene(
   let reaction: Reaction | null = null;
   let reactionUntil = 0;
   let particles: Particle[] = [];
+  let tool: SceneTool = 'hand';
+  let position = { x: 0.5, y: 0.57 };
+  let destination = { ...position };
+  let walking = false;
+  let walkPhase = 0;
+  let lastInteraction = 0;
+  let nextWander = 9;
+  let groundMarker = { x: 0, y: 0, until: 0 };
+  let pointerStart: { x: number; y: number; id: number } | null = null;
   let width = 1;
   let height = 1;
   let pointer = 0;
@@ -188,9 +206,9 @@ export function createScene(
     ctx.fillRect(0, 0, WORLD_W, WORLD_H);
     ellipse(790, 108, 65, 65, tundra ? '#f6f4e6' : '#f5e3a5');
     ellipse(790, 108, 49, 49, tundra ? '#fefbf0' : '#ffe9b1');
-    cloud(310, 95, 0.7);
-    cloud(670, 170, 0.55);
-    cloud(940, 66, 0.8);
+    cloud(310 + Math.sin(clock * 0.04) * 34, 95, 0.7);
+    cloud(670 + Math.sin(clock * 0.035 + 1) * 26, 170, 0.55);
+    cloud(940 + Math.sin(clock * 0.03 + 2) * 31, 66, 0.8);
     if (coast) {
       hill('#c7dcd2', 305, 220, 195);
       ctx.fillStyle = '#9dcac5';
@@ -410,8 +428,13 @@ export function createScene(
     const active = reaction !== null && clock < reactionUntil;
     const happy = active && reaction !== 'rest';
     const sleepy = pet.sleeping || (active && reaction === 'rest');
-    const bounce =
-      !motion.matches && happy ? Math.abs(Math.sin((reactionUntil - clock) * 7)) * 14 : 0;
+    const bounce = !motion.matches
+      ? happy
+        ? Math.abs(Math.sin((reactionUntil - clock) * 7)) * 14
+        : walking
+          ? Math.abs(Math.sin(walkPhase)) * 8
+          : 0
+      : 0;
     const breathing = motion.matches ? 0 : Math.sin(clock * (sleepy ? 1.7 : 2.1)) * 2.4;
     const base = coast ? '#7bb7ba' : tundra ? '#b7adc9' : '#a7bb82';
     const shade = coast ? '#64a4aa' : tundra ? '#9c91b5' : '#8fa56a';
@@ -422,7 +445,9 @@ export function createScene(
     ellipse(522, 471, 75, 9, '#40583a13');
     ctx.save();
     ctx.translate(522 + offset, 344 - bounce);
-    ctx.rotate(motion.matches ? 0 : Math.sin(clock * 1.4) * 0.012);
+    ctx.rotate(
+      motion.matches ? 0 : walking ? Math.sin(walkPhase) * 0.035 : Math.sin(clock * 1.4) * 0.012,
+    );
     ctx.scale(1 + breathing * 0.001, 1 + breathing * 0.003);
     // Tail stays behind the silhouette.
     ctx.save();
@@ -476,8 +501,8 @@ export function createScene(
       ctx.restore();
     }
     // Feet are separate to keep the idle movement readable.
-    ellipse(-57, 111, 31, 15, shade, -0.12);
-    ellipse(57, 111, 31, 15, shade, 0.12);
+    ellipse(-57, 111 - (walking ? Math.max(0, Math.sin(walkPhase)) * 9 : 0), 31, 15, shade, -0.12);
+    ellipse(57, 111 - (walking ? Math.max(0, -Math.sin(walkPhase)) * 9 : 0), 31, 15, shade, 0.12);
     const bodyGradient = ctx.createLinearGradient(-60, -100, 80, 120);
     bodyGradient.addColorStop(0, light);
     bodyGradient.addColorStop(0.5, base);
@@ -595,14 +620,148 @@ export function createScene(
     ctx.restore();
   }
 
+  function petScale(): number {
+    const bodyWidth =
+      width < 600 ? Math.min(152, width * 0.36) : Math.min(220, Math.max(176, width * 0.16));
+    const compactLandscape = width > 700 && height <= 500;
+    const availableScale = compactLandscape
+      ? Math.min(0.48, Math.max(0.18, (height - 220) / 315))
+      : Math.max(0.3, (height - 230) / 315);
+    return Math.min(bodyWidth / 220, availableScale);
+  }
+  function clampDestination(x: number, y: number): { x: number; y: number } {
+    const scale = petScale();
+    const compactLandscape = width > 700 && height <= 500;
+    const bottomSafe = compactLandscape ? 118 : width < 600 ? 165 : 176;
+    const upper = compactLandscape
+      ? (88 + 178 * scale) / height
+      : Math.max(0.3, Math.min(0.47, (height - bottomSafe - 140 * scale) / height));
+    const lower = Math.max(upper, Math.min(0.72, (height - bottomSafe - 140 * scale) / height));
+    const sideMargin = Math.min(0.4, Math.max(0.14, (150 * scale + 8) / width));
+    return {
+      x: Math.max(sideMargin, Math.min(1 - sideMargin, Number.isFinite(x) ? x : 0.5)),
+      y: Math.max(upper, Math.min(lower, Number.isFinite(y) ? y : 0.57)),
+    };
+  }
+  function moveTo(x: number, y: number, fromInput = false) {
+    if (disposed) return;
+    destination = clampDestination(x, y);
+    if (fromInput) {
+      lastInteraction = clock;
+      nextWander = clock + 11;
+      groundMarker = { ...destination, until: clock + 1.3 };
+      options.onWalk?.(destination.x, destination.y);
+    }
+    if (motion.matches) position = { ...destination };
+    requestFrame();
+  }
+  function habitatObjects() {
+    const unit = Math.min(width / 1000, height / 650);
+    // Add framing trees in portrait, where the wide world otherwise crops them away.
+    if (width / height < 1.05) {
+      pine(
+        width * 0.045,
+        height * 0.57,
+        unit * 1.45,
+        pet.biome === 'tundra' ? '#9cb8b7' : '#8ca77b',
+        pet.biome === 'tundra',
+      );
+      pine(
+        width * 0.96,
+        height * 0.61,
+        unit * 1.7,
+        pet.biome === 'tundra' ? '#8fa9ad' : '#819e77',
+        pet.biome === 'tundra',
+      );
+    }
+    ctx.save();
+    ctx.translate(width * 0.2, height * 0.73);
+    ctx.scale(unit, unit);
+    ellipse(0, 0, 105, 29, pet.biome === 'tundra' ? '#c3d8dc' : '#b8c5a0');
+    ellipse(0, -4, 95, 25, pet.biome === 'tundra' ? '#bad8df' : '#98c2b3');
+    ellipse(-8, -8, 74, 16, pet.biome === 'tundra' ? '#d6e8e8' : '#afd3c0');
+    ctx.beginPath();
+    ctx.ellipse(4, -5, 53 + Math.sin(clock * 1.8) * 3, 11, 0, 0, TAU);
+    stroke('#e9f2d880', 1.5);
+    ellipse(-83, 2, 14, 9, '#a6ad8b');
+    ellipse(78, 1, 20, 12, '#c0c3a1');
+    grass(-86, -3, 16, '#789979');
+    grass(82, 2, 13, '#789979');
+    ctx.restore();
+    // A little woven sleeping blanket belongs to this world rather than a menu.
+    ctx.save();
+    ctx.translate(width * 0.8, height * 0.73);
+    ctx.scale(unit, unit);
+    ctx.rotate(-0.1);
+    ellipse(0, 6, 76, 29, '#3e573411');
+    ellipse(0, 0, 73, 28, '#c8b88b');
+    ellipse(0, -4, 66, 23, pet.biome === 'tundra' ? '#d9c4c6' : '#e4d8b5');
+    ctx.beginPath();
+    ctx.ellipse(0, -4, 55, 17, 0, 0, TAU);
+    stroke('#b9a780', 1.3);
+    ellipse(35, -11, 19, 10, '#f3eacb', 0.1);
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 11, -20);
+      ctx.lineTo(i * 11 - 8, 10);
+      stroke('#c7b98d55', 1);
+    }
+    ctx.restore();
+    // Fallen fruit and gently moving grass make useful objects part of the scenery.
+    ctx.save();
+    ctx.translate(width * 0.12, height * 0.64);
+    ctx.scale(unit, unit);
+    ellipse(0, 17, 25, 7, '#4d64331c');
+    ellipse(-9, 0, 14, 17, '#cf8d5d', -0.1);
+    ellipse(9, 0, 14, 17, '#d49a69', 0.1);
+    leaf(0, -13, 14, 0.5, '#779758');
+    ellipse(-12, -5, 4, 6, '#e9b382', 0.3);
+    ctx.restore();
+    // Floating pollen/light motes remain light enough to keep focus on the creature.
+    for (const mote of landmarks.slice(14, 23)) {
+      const x = (mote.x / WORLD_W) * width + Math.sin(clock * 0.24 + mote.phase) * 12;
+      const y = height * (0.32 + mote.y * 0.42) + Math.cos(clock * 0.45 + mote.phase) * 9;
+      ellipse(
+        x,
+        y,
+        1.5 * mote.size,
+        1.5 * mote.size,
+        pet.biome === 'tundra' ? '#ffffffa6' : '#f6ecc599',
+      );
+    }
+  }
   function render() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
+    ctx.save();
     const scale = Math.max(width / WORLD_W, height / WORLD_H);
     ctx.translate((width - WORLD_W * scale) / 2, height - WORLD_H * scale);
     ctx.scale(scale, scale);
     background();
+    ctx.restore();
+    habitatObjects();
+    if (clock < groundMarker.until && !motion.matches) {
+      const alpha = Math.max(0, (groundMarker.until - clock) / 1.3);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.beginPath();
+      ctx.ellipse(
+        groundMarker.x * width,
+        groundMarker.y * height + 120 * petScale(),
+        17 + (1 - alpha) * 12,
+        6,
+        0,
+        0,
+        TAU,
+      );
+      stroke('#fff7db', 2);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(position.x * width, position.y * height);
+    ctx.scale(petScale(), petScale());
+    ctx.translate(-522, -344);
     creature();
     for (const p of particles) {
       ctx.save();
@@ -618,8 +777,8 @@ export function createScene(
       }
       ctx.restore();
     }
+    ctx.restore();
   }
-
   function animate(time: number) {
     frame = 0;
     if (disposed || document.hidden) return;
@@ -627,6 +786,27 @@ export function createScene(
     previous = time;
     if (!motion.matches) clock += dt;
     pointer += (targetPointer - pointer) * Math.min(1, dt * 5);
+    if (
+      !pet.sleeping &&
+      !reaction &&
+      !motion.matches &&
+      clock > nextWander &&
+      clock - lastInteraction > 8
+    ) {
+      const random = seeded(pet.seed + Math.floor(clock / 5) * 71);
+      moveTo(position.x + (random() - 0.5) * 0.22, position.y + (random() - 0.5) * 0.055);
+      nextWander = clock + 10 + random() * 8;
+    }
+    const dx = (destination.x - position.x) * width;
+    const dy = (destination.y - position.y) * height;
+    const distance = Math.hypot(dx, dy);
+    walking = !pet.sleeping && !motion.matches && distance > 1;
+    if (walking) {
+      const step = Math.min(1, ((width < 600 ? 92 : 125) * dt) / distance);
+      position.x += (destination.x - position.x) * step;
+      position.y += (destination.y - position.y) * step;
+      walkPhase += dt * 10;
+    }
     if (reaction && clock >= reactionUntil) reaction = null;
     for (const p of particles) {
       p.age += dt;
@@ -652,6 +832,8 @@ export function createScene(
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
+    position = clampDestination(position.x, position.y);
+    destination = clampDestination(destination.x, destination.y);
     render();
     requestFrame();
   }
@@ -662,19 +844,58 @@ export function createScene(
       previous = 0;
     } else requestFrame();
   }
-  function pointerMove(event: PointerEvent) {
+  function eventPosition(event: PointerEvent) {
     const bounds = canvas.getBoundingClientRect();
-    targetPointer = Math.max(
-      -1,
-      Math.min(1, ((event.clientX - bounds.left) / bounds.width) * 2 - 1),
-    );
+    return {
+      x: (event.clientX - bounds.left) / Math.max(bounds.width, 1),
+      y: (event.clientY - bounds.top) / Math.max(bounds.height, 1),
+    };
+  }
+  function overPet(x: number, y: number) {
+    const scale = petScale();
+    const dx = ((x - position.x) * width) / (125 * scale);
+    const dy = ((y - position.y) * height + 24 * scale) / (166 * scale);
+    return dx * dx + dy * dy < 1;
+  }
+  function pointerMove(event: PointerEvent) {
+    const point = eventPosition(event);
+    targetPointer = Math.max(-1, Math.min(1, (point.x - position.x) * 4));
+    canvas.style.cursor = overPet(point.x, point.y)
+      ? tool === 'hand'
+        ? 'grab'
+        : 'pointer'
+      : 'default';
     if (motion.matches) {
-      pointer = 0;
+      pointer = targetPointer;
       render();
     }
   }
+  function pointerDown(event: PointerEvent) {
+    if (!event.isPrimary || event.button !== 0) return;
+    pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId };
+  }
+  function pointerUp(event: PointerEvent) {
+    const start = pointerStart;
+    pointerStart = null;
+    if (
+      !start ||
+      start.id !== event.pointerId ||
+      Math.hypot(event.clientX - start.x, event.clientY - start.y) > 14
+    )
+      return;
+    const point = eventPosition(event);
+    if (overPet(point.x, point.y)) {
+      lastInteraction = clock;
+      nextWander = clock + 12;
+      destination = { ...position };
+      walking = false;
+      options.onPetInteract?.(tool);
+    } else if (point.y > 0.32) moveTo(point.x, point.y - (80 * petScale()) / height, true);
+  }
   function pointerLeave() {
     targetPointer = 0;
+    pointerStart = null;
+    canvas.style.cursor = 'default';
   }
   function motionChange() {
     if (frame) cancelAnimationFrame(frame);
@@ -685,7 +906,11 @@ export function createScene(
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
   document.addEventListener('visibilitychange', visibility);
+  canvas.style.touchAction = 'none';
   canvas.addEventListener('pointermove', pointerMove);
+  canvas.addEventListener('pointerdown', pointerDown);
+  canvas.addEventListener('pointerup', pointerUp);
+  canvas.addEventListener('pointercancel', pointerLeave);
   canvas.addEventListener('pointerleave', pointerLeave);
   motion.addEventListener('change', motionChange);
   resize();
@@ -693,7 +918,16 @@ export function createScene(
   return {
     update(next) {
       if (disposed) return;
+      const changedBiome = pet.biome !== next.biome;
       pet = { ...next };
+      if (changedBiome) {
+        position = clampDestination(0.5, 0.57);
+        destination = { ...position };
+        particles = [];
+        walking = false;
+        lastInteraction = clock;
+        nextWander = clock + 11;
+      }
       if (renderedSeed !== pet.seed) {
         renderedSeed = pet.seed;
         appearance = seeded(pet.seed)();
@@ -703,6 +937,10 @@ export function createScene(
     },
     react(action) {
       if (disposed) return;
+      lastInteraction = clock;
+      nextWander = clock + 12;
+      destination = { ...position };
+      walking = false;
       reaction = action;
       reactionUntil = clock + (motion.matches ? 0 : 2.4);
       if (!motion.matches) {
@@ -724,12 +962,28 @@ export function createScene(
       render();
       requestFrame();
     },
+    setTool(nextTool) {
+      if (disposed) return;
+      tool = nextTool;
+      canvas.dataset.tool = tool;
+      lastInteraction = clock;
+      nextWander = clock + 12;
+    },
+    walkTo(x, y) {
+      moveTo(x, y, true);
+    },
+    getPetPosition() {
+      return { ...position };
+    },
     destroy() {
       disposed = true;
       if (frame) cancelAnimationFrame(frame);
       observer.disconnect();
       document.removeEventListener('visibilitychange', visibility);
       canvas.removeEventListener('pointermove', pointerMove);
+      canvas.removeEventListener('pointerdown', pointerDown);
+      canvas.removeEventListener('pointerup', pointerUp);
+      canvas.removeEventListener('pointercancel', pointerLeave);
       canvas.removeEventListener('pointerleave', pointerLeave);
       motion.removeEventListener('change', motionChange);
       particles = [];

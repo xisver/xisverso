@@ -15,9 +15,12 @@ import {
   type Action,
   type BiomeId,
 } from './domain/game';
-import { createScene } from './render/scene';
+import { createScene, type SceneTool } from './render/scene';
 
 const icons: Record<string, string> = {
+  apple:
+    '<path d="M12 7C5 2 1 10 5 17c3 6 5 3 7 3s4 3 7-3c4-7 0-15-7-10Z"/><path d="M12 7c-1-4 1-6 4-6m-4 4c-4 0-5-2-5-3 3-1 5 0 5 3"/>',
+  menu: '<path d="M5 7h14M5 12h14M5 17h14"/>',
   leaf: '<path d="M20 4C10 2 3 7 5 14c2 7 13 7 15-10Z"/><path d="M4 21 15 10M10 15l-1-5m4 2 4 1"/>',
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
   compass: '<circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5Z"/>',
@@ -60,81 +63,112 @@ try {
   saveAvailable = false;
 }
 let state = initial ?? createGame();
-let activeView = 'home';
 let sleepingUntil = 0;
 let lastCare = -Infinity;
+let selectedTool: SceneTool = 'hand';
 let journal: { text: string; time: string; type: string }[] = [];
 let toastTimer: ReturnType<typeof setTimeout>;
+let thoughtTimer: ReturnType<typeof setTimeout>;
 let gameTimer: ReturnType<typeof setInterval> | undefined;
 let gameRunning = false;
 let gameScore = 0;
 let gameEnds = 0;
 let gameFinished = false;
+let blockToolClickUntil = 0;
+let drag: { tool: SceneTool; x: number; y: number; active: boolean; pointerId: number } | null =
+  null;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
-  <aside class="sidebar">
-    <a class="brand" href="#refugio" aria-label="Xisverso, mi refugio"><span class="brand-mark">${icon('leaf')}</span><span>Xisverso<span class="brand-sub">UN MUNDO DE XISSOFT</span></span></a>
-    <div class="nav-caption">TU PEQUEÑO UNIVERSO</div>
-    <nav class="main-nav" aria-label="Navegación principal">
-      <button class="nav-item active" data-view="home" aria-label="Mi refugio">${icon('home')}<span>Mi refugio</span><span class="nav-dot"></span></button>
-      <button class="nav-item" data-view="biomes" aria-label="Explorar biomas">${icon('compass')}<span>Explorar biomas</span></button>
-      <button class="nav-item" data-view="journal" aria-label="Mi bitácora">${icon('book')}<span>Mi bitácora</span></button>
-      <button class="nav-item" data-view="community" aria-label="Comunidad">${icon('friends')}<span>Comunidad</span><span class="soon-dot" title="En desarrollo"></span></button>
+  <main class="game-shell" data-tool="hand">
+    <h1 class="sr-only">Tu refugio en Xisverso</h1>
+    <canvas id="pet-scene" class="world-canvas" role="img" aria-label="El refugio de Nubi. Toca el suelo para caminar y a tu mascota para interactuar."></canvas>
+    <header class="game-hud">
+      <a class="game-brand" href="#refugio" aria-label="Xisverso, tu refugio"><span class="brand-mark">${icon('leaf')}</span><span>Xisverso<small>UN MUNDO DE XISSOFT</small></span></a>
+      <button class="location-pill" data-open="travel-dialog" aria-label="Explorar biomas">${icon('leaf')}<span><strong id="biome-name">Bosque Susurro</strong><small class="location-subtitle">Un día para explorar</small></span>${icon('compass')}</button>
+      <div class="hud-right"><span class="wallet" title="Semillas disponibles">${icon('coin')}<strong id="coins">80</strong><span>semillas</span></span><button class="menu-button" data-open="menu-dialog" aria-label="Menú">${icon('menu')}</button></div>
+    </header>
+    <button class="pet-status-button" id="open-pet" data-open="pet-dialog" aria-label="Cómo está Nubi"><span class="pet-status-avatar">${icon('leaf')}</span><span><strong id="pet-name">Nubi</strong><small id="scene-mood">Con ganas de explorar</small></span><span class="status-chevron">${icon('heart')}</span></button>
+    <div class="speech-bubble" id="pet-speech"><span id="pet-thought"></span><span class="speech-heart">♡</span></div>
+    <button id="pet-interact" class="pet-interact" aria-label="Interactuar con Nubi" aria-describedby="interaction-hint"></button>
+    <button class="world-sign travel-sign" data-open="travel-dialog" aria-label="Ir al sendero">${icon('compass')}<span>Otros rincones</span><span>↖</span></button>
+    <button class="world-sign" data-play="true" aria-label="Buscar luciérnagas">${icon('spark')}<span>Luciérnagas</span><span>↗</span></button>
+
+    <p class="interaction-hint" id="interaction-hint">Toca a Nubi para darle cariño · Toca el suelo para caminar</p>
+    <nav class="toolbelt" aria-label="Herramientas del refugio">
+      <button class="tool-button selected" data-tool="hand" aria-label="Caricias" aria-pressed="true" aria-keyshortcuts="1"><span class="tool-key">1</span><span class="tool-icon">${icon('heart')}</span><span class="tool-name">Caricias</span></button>
+      <button class="tool-button" data-tool="feed" aria-label="Comida" aria-pressed="false" aria-keyshortcuts="2"><span class="tool-key">2</span><span class="tool-icon">${icon('apple')}</span><span class="tool-name">Comida</span><span class="tool-price">5 ${icon('coin')}</span></button>
+      <button class="tool-button" data-tool="clean" aria-label="Burbujas" aria-pressed="false" aria-keyshortcuts="3"><span class="tool-key">3</span><span class="tool-icon">${icon('drop')}</span><span class="tool-name">Burbujas</span></button>
+      <button class="tool-button" data-tool="rest" aria-label="Siesta" aria-pressed="false" aria-keyshortcuts="4"><span class="tool-key">4</span><span class="tool-icon">${icon('moon')}</span><span class="tool-name">Siesta</span></button>
+      <span class="tool-divider" aria-hidden="true"></span>
+      <button class="tool-button play-tool" id="start-game" data-play="true" aria-label="Jugar"><span class="tool-icon">${icon('spark')}</span><span class="tool-name">Jugar</span></button>
     </nav>
-    <div class="sidebar-note"><span class="little-flower">✳</span><p>Las grandes amistades<br>empiezan en pequeño.</p><span>CRECE A TU RITMO</span></div>
-    <div class="studio"><span class="studio-avatar">X</span><div><strong>XisSoft</strong><span>Laboratorio de mundos</span></div><span class="studio-spark">✧</span></div>
-  </aside>
-  <main class="main-content">
-    <header class="topbar"><span class="breadcrumb">Mi universo <span>/</span> <strong id="view-label">Mi refugio</strong></span><div class="topbar-right"><span class="local-status"><span></span>Guardado local</span><span class="wallet">${icon('coin')}<strong id="coins">80</strong><span>semillas</span></span></div></header>
-    <section class="page-intro"><div><p class="eyebrow">UN POQUITO DE CUIDADO, UN MUNDO DE CARIÑO</p><h1 id="page-title">Tu lugar feliz.</h1><p id="page-subtitle">Un nuevo día para crecer juntos, a tu propio ritmo.</p></div><span class="day-chip">${icon('sun')}<span id="date-label"></span></span></section>
-    <div id="home-view" class="view">
-      <div class="refuge-grid">
-        <section class="habitat-card" aria-label="Hábitat de tu mascota">
-          <div class="scene-wrap"><canvas id="pet-scene" role="img" aria-label="Nubi, una mascota dibujada por código, en su hábitat"></canvas><div class="scene-top"><span class="biome-pill">${icon('leaf')}<span id="biome-name">Bosque susurrante</span></span><button class="scene-change" data-view="biomes">Cambiar bioma ${icon('arrow')}</button></div><span class="scene-tag">UN PEQUEÑO MUNDO VIVO</span><button class="pet-touch" aria-label="Acariciar a tu mascota" title="Dale una caricia a Nubi"></button><div class="scene-caption"><span class="mood-dot"></span><span id="scene-mood">Nubi está explorando su hogar</span><span class="scene-decoration">✧</span></div></div>
-          <div class="pet-profile"><div class="pet-identity"><span class="pet-avatar">${icon('leaf')}</span><div><div class="pet-name-line"><h2 id="pet-name">Nubi</h2><button id="rename-button" class="icon-button" aria-label="Cambiar nombre">${icon('edit')}</button><span class="species-tag">Brotín</span></div><p id="pet-description">Un espíritu curioso del bosque</p></div></div><div class="pet-level"><span class="level-badge">1</span><div><strong id="level-label">Pequeño explorador</strong><span id="xp-label">0 / 100 XP</span><div class="xp-track"><span id="xp-fill"></span></div></div></div></div>
-        </section>
-        <aside class="wellbeing-card"><div class="card-heading"><span class="eyebrow">LOS PEQUEÑOS CUIDADOS</span><span class="soft-icon">${icon('heart')}</span></div><h2>¿Cómo está <span id="needs-name">Nubi</span>?</h2><p class="muted">Cada detalle le hace bien.</p><div id="needs-list" class="needs-list"></div><div class="bond-panel"><div>${icon('heart')}<strong>Su vínculo contigo</strong><span id="bond-label">0%</span></div><div class="bond-track"><span id="bond-fill"></span></div><p id="bond-description">Una amistad que apenas comienza.</p></div><div class="care-tip">${icon('spark')}<p>Una caricia también cuenta.<br><strong>Estar aquí ya es un gran comienzo.</strong></p></div></aside>
-      </div>
-      <section class="care-section"><div class="section-title"><h2>Un ratito para ustedes</h2><span>Los pequeños momentos importan</span></div><div class="care-actions">
-        <button class="care-action" data-care="feed"><span class="action-icon food">${icon('food')}</span><span><strong>Dar de comer</strong><small>Algo rico para crecer</small></span><span class="action-price">5 ${icon('coin')}</span></button>
-        <button class="care-action" data-care="clean"><span class="action-icon water">${icon('drop')}</span><span><strong>Un baño</strong><small>Fresco como una hoja</small></span><span class="action-arrow">↗</span></button>
-        <button class="care-action" data-care="pet"><span class="action-icon love">${icon('heart')}</span><span><strong>Dar cariño</strong><small>Su momento favorito</small></span><span class="action-arrow">↗</span></button>
-        <button class="care-action" data-care="rest"><span class="action-icon rest">${icon('moon')}</span><span><strong>Descansar</strong><small>Soñar nuevas aventuras</small></span><span class="action-arrow">↗</span></button>
-      </div></section>
-      <div class="discovery-grid"><section class="adventure-card"><div class="adventure-copy"><span class="eyebrow">UNA PEQUEÑA AVENTURA</span><h2>¡Sigue las lucecitas!</h2><p>Recoge luciérnagas con tu mascota.<br>Un juego, muchas semillas y un ratito juntos.</p><button class="primary-button" id="start-game">Vamos a jugar ${icon('arrow')}</button><span id="best-score" class="best-score">Tu primera aventura te espera</span></div><div class="adventure-art" aria-hidden="true"><span class="art-moon"></span><span class="art-hill hill-one"></span><span class="art-hill hill-two"></span><span class="art-leaf leaf-one"></span><span class="art-leaf leaf-two"></span><span class="art-firefly f1"></span><span class="art-firefly f2"></span><span class="art-firefly f3"></span><span class="art-firefly f4"></span></div></section><section class="moments-card"><div class="section-title"><h2>Pequeños recuerdos</h2>${icon('book')}</div><p class="muted">Lo bonito de esta sesión.</p><div id="recent-events" class="recent-events"></div><button class="text-button" data-view="journal">Abrir mi bitácora ${icon('arrow')}</button></section></div>
-    </div>
-    <section id="biomes-view" class="view" hidden><div class="section-banner">${icon('compass')}<p>Cada rincón tiene su propio encanto. Explora los tres biomas de esta primera versión con tu mascota.</p></div><div id="biome-cards" class="biome-cards"></div><p class="view-footnote">Próximamente: especies propias de cada bioma y un refugio para varias mascotas.</p></section>
-    <section id="journal-view" class="view" hidden><div class="journal-panel"><span class="eyebrow">RECUERDOS DE ESTA SESIÓN</span><h2>Las pequeñas cosas se quedan contigo.</h2><p class="muted">El progreso de tu mascota se guarda en este navegador. Esta bitácora muestra los momentos desde que abriste el juego.</p><div id="journal-events" class="journal-events"></div></div></section>
-    <section id="community-view" class="view" hidden><div class="community-hero"><span class="community-illustration">${icon('friends')}</span><span class="eyebrow">EL MUNDO CRECERÁ CONTIGO</span><h2>Las amistades también<br>cruzan biomas.</h2><p>Estamos preparando un lugar para que tu mascota conozca a las de otros jugadores. Por ahora, disfruta de su primer hogar.</p><span class="development-badge">En la ruta de desarrollo</span></div><div class="community-steps"><article>${icon('home')}<h3>Visita otros refugios</h3><p>Conoce mascotas y comparte pequeños momentos.</p></article><article>${icon('friends')}<h3>Convive en tiempo real</h3><p>Salas privadas para jugar con tus amistades.</p></article><article>${icon('spark')}<h3>Jueguen en equipo</h3><p>Minijuegos cooperativos y nuevas aventuras.</p></article></div></section>
-    <footer class="page-footer"><span>${icon('leaf')} Hecho para crecer contigo.</span><span>Xisverso <span>·</span> XisSoft <span>·</span> Versión semilla 0.1</span></footer>
+    <footer class="world-footer"><span>XisSoft <span>✧</span> Crece a tu ritmo</span><span class="local-status"><span></span>Guardado local</span></footer>
+    <span class="tool-cursor" id="tool-cursor" hidden aria-hidden="true"></span>
   </main>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="game-toast" role="status" aria-live="polite"></div>
+  <dialog id="pet-dialog" class="sheet-dialog" aria-labelledby="pet-sheet-title"><button class="dialog-close" data-close="pet-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UN RATITO PARA CONOCERSE</span><div class="pet-sheet-heading"><div><h2 id="pet-sheet-title">Cómo está <span id="needs-name">Nubi</span></h2><p class="muted"><span class="species-tag">Brotín</span> · <span id="pet-description">Un espíritu curioso del bosque</span></p></div><button id="rename-button" class="icon-button" aria-label="Cambiar nombre">${icon('edit')}</button></div><div id="needs-list" class="needs-list"></div><div class="bond-panel"><div>${icon('heart')}<strong>Su vínculo contigo</strong><span id="bond-label">12%</span></div><div class="bond-track"><span id="bond-fill"></span></div><p id="bond-description">Una amistad que apenas comienza.</p></div><div class="level-info"><span class="level-badge">1</span><div><strong id="level-label">Pequeño explorador</strong><span id="xp-label">0 / 100 XP</span><div class="xp-track"><span id="xp-fill"></span></div></div></div><p id="best-score" class="best-score">Su primera aventura los espera.</p><button class="text-button" data-close="pet-dialog">Volver a nuestro mundo ${icon('arrow')}</button></dialog>
+  <dialog id="travel-dialog" class="travel-dialog" aria-labelledby="travel-title"><button class="dialog-close" data-close="travel-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">¿A DÓNDE VAMOS HOY?</span><h2 id="travel-title">Un mundo por descubrir.</h2><p class="muted">Lleva a tu compañero a un nuevo rincón. Su amistad viaja con ustedes.</p><div id="biome-cards" class="biome-cards"></div><p class="view-footnote">Tres biomas para explorar. Las nuevas especies llegarán en otro capítulo.</p></dialog>
+  <dialog id="menu-dialog" class="menu-dialog" aria-labelledby="menu-title"><button class="dialog-close" data-close="menu-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">XISVERSO</span><h2 id="menu-title">Tu pequeño universo.</h2><div class="menu-actions"><button data-open="pet-dialog">${icon('heart')} Mi compañero ${icon('arrow')}</button><button data-open="travel-dialog">${icon('compass')} Explorar el mundo ${icon('arrow')}</button><button data-open="journal-dialog">${icon('book')} Mi bitácora ${icon('arrow')}</button><button data-open="community-dialog">${icon('friends')} Comunidad ${icon('arrow')}</button></div><p class="controls-help">Toca el suelo para caminar. Elige una herramienta y toca a tu mascota; también puedes arrastrar la herramienta hasta ella.</p><p class="controls-help">Teclado: 1–4 eligen herramienta, flechas para caminar y Espacio para interactuar. Tab recorre los controles.</p><button class="primary-button" data-close="menu-dialog">Volver al refugio ${icon('arrow')}</button></dialog>
+  <dialog id="journal-dialog" class="sheet-dialog" aria-labelledby="journal-title"><button class="dialog-close" data-close="journal-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">RECUERDOS DE ESTA SESIÓN</span><h2 id="journal-title">Pequeños momentos, gran amistad.</h2><p class="muted">Lo que han vivido desde que abriste el refugio.</p><div id="journal-events" class="journal-events"></div></dialog>
+  <dialog id="community-dialog" class="sheet-dialog" aria-labelledby="community-title"><button class="dialog-close" data-close="community-dialog" aria-label="Cerrar">${icon('close')}</button><div class="community-hero">${icon('friends')}<span class="eyebrow">EL SIGUIENTE CAPÍTULO</span><h2 id="community-title">Las amistades cruzarán biomas.</h2><p>Estamos preparando visitas a otros refugios, encuentros entre mascotas y juegos en equipo.</p><span class="development-badge">En la ruta de desarrollo</span></div></dialog>
   <dialog id="rename-dialog" class="rename-dialog" aria-labelledby="rename-title"><form id="rename-form"><button type="button" class="dialog-close" data-close="rename-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UNA AMISTAD CON NOMBRE PROPIO</span><h2 id="rename-title">¿Cómo se llama tu mascota?</h2><label for="pet-name-input">Su nombre</label><input id="pet-name-input" name="petName" maxlength="24" required autocomplete="off" placeholder="Nubi" /><p class="muted">Hasta 24 caracteres. Puedes cambiarlo cuando quieras.</p><button class="primary-button" type="submit">Guardar nombre ${icon('check')}</button></form></dialog>
   <dialog id="game-dialog" class="game-dialog" aria-labelledby="game-title"><div class="game-header"><div><span class="eyebrow">UNA AVENTURA JUNTOS</span><h2 id="game-title">Atrapa las luciérnagas</h2></div><button type="button" class="dialog-close" id="exit-game" aria-label="Salir del minijuego">${icon('close')}</button></div><p class="game-instructions">Toca las lucecitas antes de que termine el tiempo. También puedes usar Tab y Enter.</p><div class="game-counters"><span>${icon('sun')}<strong id="game-time">20</strong> segundos</span><span>${icon('spark')}<strong id="game-score">0</strong> luciérnagas</span></div><div class="game-field" id="game-field"><span class="game-horizon"></span></div><div id="game-result" class="game-result" hidden></div><p class="game-tip">Cada luciérnaga cuenta. Las recompensas se entregan al terminar los 20 segundos.</p></dialog>
 `;
-
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
-const scene = createScene($('#pet-scene'), {
-  seed: state.pet.seed,
-  biome: state.pet.biome,
-  mood: getMood(state),
-  sleeping: false,
-});
-
+const canvas = $<HTMLCanvasElement>('#pet-scene');
+const scene = createScene(
+  canvas,
+  { seed: state.pet.seed, biome: state.pet.biome, mood: getMood(state), sleeping: false },
+  {
+    onPetInteract: (tool) => interactWithPet(tool),
+    onWalk: () => {
+      sleepingUntil = 0;
+      scene.update({
+        seed: state.pet.seed,
+        biome: state.pet.biome,
+        mood: getMood(state),
+        sleeping: false,
+      });
+      say('¡Voy contigo!', 1800);
+    },
+  },
+);
+const toolDetails: Record<SceneTool, { icon: string; hint: string }> = {
+  hand: { icon: 'heart', hint: 'Toca a tu mascota para darle cariño · Toca el suelo para caminar' },
+  feed: { icon: 'apple', hint: 'Acerca la manzana a tu mascota · 5 semillas al darle de comer' },
+  clean: { icon: 'drop', hint: 'Toca a tu mascota con las burbujas para darle un baño' },
+  rest: { icon: 'moon', hint: 'Toca a tu mascota para ayudarla a descansar un ratito' },
+};
 function toast(message: string) {
   clearTimeout(toastTimer);
   $('#toast').textContent = message;
   $('#toast').classList.add('visible');
   toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 3800);
 }
+function say(message: string, duration = 5000) {
+  clearTimeout(thoughtTimer);
+  $('#pet-thought').textContent = message;
+  $('#pet-speech').classList.add('visible');
+  thoughtTimer = setTimeout(() => $('#pet-speech').classList.remove('visible'), duration);
+}
+function closeDialogs() {
+  document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach((dialog) => dialog.close());
+}
+function openDialog(id: string) {
+  closeDialogs();
+  if (id === 'pet-dialog') renderState();
+  if (id === 'travel-dialog') renderBiomes();
+  $<HTMLDialogElement>(`#${id}`).showModal();
+  $('#tool-cursor').hidden = true;
+}
 function reconcileSavedState() {
   try {
     const restored = parseSave(localStorage.getItem(SAVE_KEY), Date.now());
     if (restored) state = restored;
   } catch {
-    /* The session remains playable when storage is unavailable. */
+    /* A blocked save must not prevent playing this session. */
   }
 }
 function persist() {
@@ -143,71 +177,41 @@ function persist() {
     saveAvailable = true;
   } catch {
     if (saveAvailable)
-      toast('No se pudo guardar. Mantén esta pestaña abierta para conservar la sesión.');
+      toast('No se pudo guardar. Mantén abierto el refugio para conservar esta sesión.');
     saveAvailable = false;
   }
-  const badge = $('.local-status');
-  badge.innerHTML = `<span></span>${saveAvailable ? 'Guardado local' : 'Sin guardar'}`;
-  badge.classList.toggle('save-error', !saveAvailable);
+  $('.local-status').innerHTML = `<span></span>${saveAvailable ? 'Guardado local' : 'Sin guardar'}`;
+  $('.local-status').classList.toggle('save-error', !saveAvailable);
 }
 function addEvent(text: string, type = 'heart') {
   journal.unshift({
     text,
+    type,
     time: new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(
       new Date(),
     ),
-    type,
   });
   journal = journal.slice(0, 60);
-  renderJournal();
-}
-function renderJournal() {
-  const markup = (entries: typeof journal) =>
-    entries
-      .map(
-        (event) =>
-          `<div class="journal-event"><span class="event-icon">${icon(event.type)}</span><div><p>${escapeHtml(event.text)}</p><span>${event.time}</span></div></div>`,
-      )
-      .join('');
-  $('#recent-events').innerHTML = markup(journal.slice(0, 2));
-  $('#journal-events').innerHTML = markup(journal);
+  $('#journal-events').innerHTML = journal
+    .map(
+      (event) =>
+        `<div class="journal-event"><span class="event-icon">${icon(event.type)}</span><div><p>${escapeHtml(event.text)}</p><span>${event.time}</span></div></div>`,
+    )
+    .join('');
 }
 const needsMeta = [
-  {
-    key: 'hunger' as const,
-    name: 'Saciedad',
-    icon: 'food',
-    color: '#d7a164',
-    text: 'A pancita llena, corazón contento',
-  },
-  {
-    key: 'energy' as const,
-    name: 'Energía',
-    icon: 'sun',
-    color: '#d1bc6b',
-    text: 'Para explorar un poquito más',
-  },
-  {
-    key: 'hygiene' as const,
-    name: 'Higiene',
-    icon: 'drop',
-    color: '#80b9c1',
-    text: 'Un pequeño baño le viene bien',
-  },
-  {
-    key: 'joy' as const,
-    name: 'Ánimo',
-    icon: 'smile',
-    color: '#a4b98b',
-    text: 'La alegría de estar juntos',
-  },
+  { key: 'hunger' as const, name: 'Saciedad', icon: 'food', color: '#d7a164' },
+  { key: 'energy' as const, name: 'Energía', icon: 'sun', color: '#d1bc6b' },
+  { key: 'hygiene' as const, name: 'Higiene', icon: 'drop', color: '#80b9c1' },
+  { key: 'joy' as const, name: 'Ánimo', icon: 'smile', color: '#a4b98b' },
 ];
 function renderState() {
   $('#coins').textContent = `${Math.floor(state.coins)}`;
   $('#pet-name').textContent = state.pet.name;
   $('#needs-name').textContent = state.pet.name;
-  $('#biome-name').textContent =
-    BIOMES.find((b) => b.id === state.pet.biome)?.name ?? 'Bosque susurrante';
+  $('#open-pet').setAttribute('aria-label', `Cómo está ${state.pet.name}`);
+  $('#pet-interact').setAttribute('aria-label', `Interactuar con ${state.pet.name}`);
+  $('#biome-name').textContent = BIOMES.find((b) => b.id === state.pet.biome)!.name;
   const species = {
     forest: ['Brotín', 'Un espíritu curioso del bosque'],
     coast: ['Brisín', 'Un espíritu juguetón de la costa'],
@@ -215,7 +219,10 @@ function renderState() {
   }[state.pet.biome];
   $('.species-tag').textContent = species[0];
   $('#pet-description').textContent = species[1];
-  const levelProgress = getLevelProgress(state);
+  $('.pet-status-avatar').innerHTML = icon(
+    { forest: 'leaf', coast: 'wave', tundra: 'mountain' }[state.pet.biome],
+  );
+  const progress = getLevelProgress(state);
   $('.level-badge').textContent = `${state.level}`;
   $('#level-label').textContent =
     state.level < 3
@@ -223,9 +230,8 @@ function renderState() {
       : state.level < 6
         ? 'Compañero de aventuras'
         : 'Gran amistad';
-  $('#xp-label').textContent =
-    `${Math.floor(levelProgress.current)} / ${levelProgress.required} XP`;
-  $('#xp-fill').style.width = `${levelProgress.percent}%`;
+  $('#xp-label').textContent = `${Math.floor(progress.current)} / ${progress.required} XP`;
+  $('#xp-fill').style.width = `${progress.percent}%`;
   $('#needs-list').innerHTML = needsMeta
     .map((need) => {
       const value = Math.round(state.pet.needs[need.key]);
@@ -242,28 +248,24 @@ function renderState() {
         : 'Una amistad que apenas comienza.';
   const sleeping = Date.now() < sleepingUntil;
   const mood = getMood(state);
-  const moodMessages: Record<string, string> = {
-    'Con sueño': 'tiene un poquito de sueño',
-    'Tiene hambre': 'tiene hambre',
-    'Quiere un baño': 'quiere un baño',
-    'Busca compañía': 'quiere pasar un ratito contigo',
-    Radiante: 'se siente radiante',
-    'A gusto': 'se siente a gusto',
-    'Necesita cuidados': 'necesita un poquito de cuidado',
+  const moods: Record<string, string> = {
+    'Con sueño': 'Un poquito de sueño',
+    'Tiene hambre': 'Su pancita hace ruiditos',
+    'Quiere un baño': 'Necesita unas burbujas',
+    'Busca compañía': 'Con ganas de un abrazo',
+    Radiante: 'Feliz de estar contigo',
+    'A gusto': 'Con ganas de explorar',
+    'Necesita cuidados': 'Necesita tus cuidados',
   };
-  $('#scene-mood').textContent = sleeping
-    ? `${state.pet.name} está soñando una nueva aventura`
-    : `${state.pet.name} ${moodMessages[mood] ?? 'está explorando su hogar'}`;
-  $('#pet-scene').setAttribute(
+  $('#scene-mood').textContent = sleeping ? 'Soñando una nueva aventura' : moods[mood];
+  canvas.setAttribute(
     'aria-label',
-    `${state.pet.name}, en ${$('#biome-name').textContent}. ${mood}`,
+    `${state.pet.name} en ${$('#biome-name').textContent}. Toca el suelo para caminar. Herramienta: ${selectedTool === 'hand' ? 'caricias' : selectedTool === 'feed' ? 'comida' : selectedTool === 'clean' ? 'burbujas' : 'siesta'}.`,
   );
-  $('.pet-touch').setAttribute('aria-label', `Acariciar a ${state.pet.name}`);
   $('#best-score').textContent = state.miniGameBest
-    ? `Tu mejor aventura: ${state.miniGameBest} luciérnagas`
-    : 'Tu primera aventura te espera';
+    ? `Su mejor aventura: ${state.miniGameBest} luciérnagas`
+    : 'Su primera aventura los espera.';
   scene.update({ seed: state.pet.seed, biome: state.pet.biome, mood, sleeping });
-  renderBiomes();
 }
 function renderBiomes() {
   const details = {
@@ -271,63 +273,42 @@ function renderBiomes() {
       icon: 'leaf',
       subtitle: 'ENTRE HOJAS Y SUSURROS',
       copy: 'Senderos verdes, honguitos y una brisa que invita a explorar.',
-      tag: 'Espíritu del bosque',
-      trait: 'La alegría se conserva mejor entre los árboles.',
+      trait: 'Aquí el ánimo se conserva un poquito mejor.',
     },
     coast: {
       icon: 'wave',
       subtitle: 'AL RITMO DE LAS OLAS',
-      copy: 'Arena suave, conchas y un horizonte lleno de pequeñas sorpresas.',
-      tag: 'Espíritu de la costa',
-      trait: 'La brisa salada pide un poco más de cuidado e higiene.',
+      copy: 'Arena suave, conchas y un horizonte lleno de sorpresas.',
+      trait: 'La brisa salada pide más cuidado e higiene.',
     },
     tundra: {
       icon: 'mountain',
       subtitle: 'UN ABRAZO ENTRE LA NIEVE',
-      copy: 'Montañas de algodón y un rincón cálido para soñar juntos.',
-      tag: 'Espíritu de la tundra',
-      trait: 'El frío consume más energía: descansar es importante.',
+      copy: 'Montañas de algodón y un rincón cálido para soñar.',
+      trait: 'El frío consume más energía. Descansar importa.',
     },
   };
   $('#biome-cards').innerHTML = BIOMES.map((biome) => {
-    const detailsForBiome = details[biome.id];
+    const detail = details[biome.id];
     const selected = state.pet.biome === biome.id;
-    return `<article class="biome-card ${biome.id} ${selected ? 'selected' : ''}"><div class="biome-art">${icon(detailsForBiome.icon)}<span class="biome-art-orb"></span><span class="biome-art-ground"></span></div><div class="biome-card-content"><span class="eyebrow">${detailsForBiome.subtitle}</span><h2>${escapeHtml(biome.name)}</h2><p>${detailsForBiome.copy}</p><span class="biome-trait">${icon('spark')}${detailsForBiome.trait}</span><button class="${selected ? 'secondary-button' : 'primary-button'}" data-biome="${biome.id}" ${selected ? 'disabled' : ''}>${selected ? 'Tu hogar actual' : 'Explorar este bioma'} ${icon(selected ? 'check' : 'arrow')}</button></div></article>`;
+    return `<article class="biome-card ${biome.id} ${selected ? 'selected' : ''}"><div class="biome-art">${icon(detail.icon)}<span class="biome-art-orb"></span><span class="biome-art-ground"></span></div><div class="biome-card-content"><span class="eyebrow">${detail.subtitle}</span><h3>${escapeHtml(biome.name)}</h3><p>${detail.copy}</p><span class="biome-trait">${icon('spark')}${detail.trait}</span><button class="${selected ? 'secondary-button' : 'primary-button'}" data-biome="${biome.id}" ${selected ? 'disabled' : ''}>${selected ? 'Nuestro hogar' : 'Vamos para allá'} ${icon(selected ? 'check' : 'arrow')}</button></div></article>`;
   }).join('');
 }
-function showView(view: string) {
-  if (!['home', 'biomes', 'journal', 'community'].includes(view)) return;
-  activeView = view;
-  for (const id of ['home', 'biomes', 'journal', 'community'])
-    $(`#${id}-view`).hidden = id !== view;
-  document.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
-    const selected = button.dataset.view === view;
-    button.classList.toggle('active', selected);
-    if (selected) button.setAttribute('aria-current', 'page');
-    else button.removeAttribute('aria-current');
+function selectTool(tool: SceneTool) {
+  selectedTool = tool;
+  scene.setTool(tool);
+  $('.game-shell').dataset.tool = tool;
+  document.querySelectorAll<HTMLButtonElement>('[data-tool].tool-button').forEach((button) => {
+    const selected = button.dataset.tool === tool;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', `${selected}`);
   });
-  const labels: Record<string, string[]> = {
-    home: ['Mi refugio', 'Tu lugar feliz.', 'Un nuevo día para crecer juntos, a tu propio ritmo.'],
-    biomes: [
-      'Explorar biomas',
-      'Un mundo por descubrir.',
-      'Tres pequeños rincones. Mil formas de sentirse en casa.',
-    ],
-    journal: [
-      'Mi bitácora',
-      'Todo empieza con un recuerdo.',
-      'Los pequeños momentos de una amistad que crece.',
-    ],
-    community: [
-      'Comunidad',
-      'Mejor, cuando es juntos.',
-      'El siguiente capítulo de nuestro pequeño universo.',
-    ],
-  };
-  $('#view-label').textContent = labels[view][0];
-  $('#page-title').textContent = labels[view][1];
-  $('#page-subtitle').textContent = labels[view][2];
-  if (view === 'home') requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+  $('#interaction-hint').textContent = toolDetails[tool].hint.replace('tu mascota', state.pet.name);
+  $('#tool-cursor').innerHTML = icon(toolDetails[tool].icon);
+  $('#tool-cursor').hidden = true;
+}
+function interactWithPet(tool: SceneTool = selectedTool) {
+  care(tool === 'hand' ? 'pet' : tool);
 }
 function care(action: Action) {
   if (performance.now() - lastCare < 850) return;
@@ -336,25 +317,59 @@ function care(action: Action) {
   const result = applyCare(state, action, Date.now());
   state = result.state;
   if (result.success) {
-    if (action === 'rest') sleepingUntil = Date.now() + 10000;
-    else sleepingUntil = 0;
+    sleepingUntil = action === 'rest' ? Date.now() + 10000 : 0;
     scene.react(action);
     addEvent(result.message, { feed: 'food', clean: 'drop', rest: 'moon', pet: 'heart' }[action]);
     persist();
-  }
+    say(
+      {
+        feed: '¡Ñam! ¡Estaba deliciosa!',
+        clean: '¡Burbujas! Una más, una más…',
+        pet: 'Contigo se está muy bien. ♡',
+        rest: 'Solo cinco minutitos… zzz',
+      }[action],
+    );
+  } else say(result.message);
   renderState();
-  toast(result.message);
+  if (!result.success) toast(result.message);
+  else {
+    clearTimeout(toastTimer);
+    $('#toast').classList.remove('visible');
+    $('#toast').textContent = result.message;
+  }
 }
 function openRename() {
-  $('#pet-name-input').setAttribute('value', state.pet.name);
+  openDialog('rename-dialog');
   const input = $<HTMLInputElement>('#pet-name-input');
   input.value = state.pet.name;
-  $<HTMLDialogElement>('#rename-dialog').showModal();
   input.select();
 }
 function moveFirefly(button: HTMLButtonElement) {
-  button.style.left = `${7 + Math.random() * 80}%`;
-  button.style.top = `${12 + Math.random() * 66}%`;
+  const field = $('#game-field');
+  const bounds = field.getBoundingClientRect();
+  const others = Array.from(field.querySelectorAll<HTMLButtonElement>('.firefly')).filter(
+    (other) => other !== button,
+  );
+  const margin = Math.max(9, (32 / Math.max(bounds.width, 1)) * 100);
+  let best = { x: 50, y: 45, spacing: -1 };
+  for (let attempt = 0; attempt < 35; attempt++) {
+    const x = margin + Math.random() * (100 - 2 * margin);
+    const y = 16 + Math.random() * 63;
+    const spacing = others.length
+      ? Math.min(
+          ...others.map((other) =>
+            Math.hypot(
+              ((x - parseFloat(other.style.left)) * bounds.width) / 100,
+              ((y - parseFloat(other.style.top)) * bounds.height) / 100,
+            ),
+          ),
+        )
+      : Infinity;
+    if (spacing > best.spacing) best = { x, y, spacing };
+    if (spacing >= 66) break;
+  }
+  button.style.left = `${best.x}%`;
+  button.style.top = `${best.y}%`;
 }
 function finishGame() {
   if (!gameRunning || gameFinished) return;
@@ -380,6 +395,7 @@ function finishGame() {
   $('#game-again').focus();
 }
 function startGame() {
+  closeDialogs();
   clearInterval(gameTimer);
   gameScore = 0;
   gameFinished = false;
@@ -430,14 +446,25 @@ function closeGame() {
 }
 
 document.addEventListener('click', (event) => {
-  const target = (event.target as HTMLElement).closest<HTMLElement>('button, a.brand');
+  const target = (event.target as Element).closest<HTMLElement>('button, a.game-brand');
   if (!target) return;
-  if (target.dataset.view) showView(target.dataset.view);
-  if (target.dataset.care) care(target.dataset.care as Action);
-  if (target.classList.contains('pet-touch')) care('pet');
-  if (target.classList.contains('brand')) {
+  if (target.dataset.tool) {
+    if (performance.now() < blockToolClickUntil) return;
+    selectTool(target.dataset.tool as SceneTool);
+  }
+  if (target.dataset.open) openDialog(target.dataset.open);
+  if (target.dataset.play || target.id === 'game-again') startGame();
+  if (target.id === 'pet-interact') interactWithPet();
+  if (target.id === 'rename-button') openRename();
+  if (target.id === 'exit-game') closeGame();
+  if (target.classList.contains('game-brand')) {
     event.preventDefault();
-    showView('home');
+    closeDialogs();
+    selectTool('hand');
+  }
+  if (target.dataset.close) {
+    if (target.dataset.close === 'game-dialog') closeGame();
+    else $<HTMLDialogElement>(`#${target.dataset.close}`).close();
   }
   if (target.dataset.biome) {
     reconcileSavedState();
@@ -447,38 +474,153 @@ document.addEventListener('click', (event) => {
       `${state.pet.name} descubrió ${BIOMES.find((b) => b.id === state.pet.biome)!.name}.`,
       'compass',
     );
+    closeDialogs();
     renderState();
     persist();
-    showView('home');
-    toast('¡Un nuevo rincón para explorar juntos!');
-  }
-  if (target.id === 'rename-button') openRename();
-  if (target.id === 'start-game' || target.id === 'game-again') startGame();
-  if (target.id === 'exit-game') closeGame();
-  if (target.dataset.close) {
-    if (target.dataset.close === 'game-dialog') closeGame();
-    else $<HTMLDialogElement>(`#${target.dataset.close}`).close();
+    say('Un nuevo lugar… ¡vamos a explorarlo!');
   }
 });
 $('#rename-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const name = $<HTMLInputElement>('#pet-name-input').value.trim();
-  if (!name) {
-    $<HTMLInputElement>('#pet-name-input').focus();
-    return;
-  }
+  if (!name) return;
   reconcileSavedState();
   state = renamePet(state, name);
   persist();
   renderState();
+  selectTool(selectedTool);
   $<HTMLDialogElement>('#rename-dialog').close();
-  addEvent(`Tu amistad ahora tiene un nombre: ${state.pet.name}.`, 'heart');
-  toast(`¡Le queda muy bien ${state.pet.name}!`);
+  addEvent(`Tu amistad ahora tiene un nombre: ${state.pet.name}.`);
+  say(`¡${state.pet.name}! Me gusta cómo suena.`);
 });
 $('#game-dialog').addEventListener('cancel', (event) => {
   event.preventDefault();
   closeGame();
 });
+$('#pet-interact').addEventListener('keydown', (event) => {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key))
+    event.preventDefault();
+});
+document.addEventListener('keydown', (event) => {
+  if (
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    document.querySelector('dialog[open]') ||
+    (event.target as Element).closest('input,textarea,[contenteditable=true]')
+  )
+    return;
+  const tools: Record<string, SceneTool> = { '1': 'hand', '2': 'feed', '3': 'clean', '4': 'rest' };
+  if (tools[event.key]) {
+    event.preventDefault();
+    selectTool(tools[event.key]);
+  }
+  if (event.key === 'Escape') {
+    selectTool('hand');
+    $('#tool-cursor').hidden = true;
+    drag = null;
+  }
+  const steps: Record<string, [number, number]> = {
+    ArrowLeft: [-0.09, 0],
+    ArrowRight: [0.09, 0],
+    ArrowUp: [0, -0.055],
+    ArrowDown: [0, 0.055],
+  };
+  if (steps[event.key]) {
+    event.preventDefault();
+    sleepingUntil = 0;
+    renderState();
+    const position = scene.getPetPosition();
+    scene.walkTo(position.x + steps[event.key][0], position.y + steps[event.key][1]);
+  }
+  if (event.key === ' ' && !(event.target as Element).closest('button,a')) {
+    event.preventDefault();
+    interactWithPet();
+  }
+});
+// A held tool can be carried straight into the world, with a tap alternative on touch.
+document.querySelectorAll<HTMLButtonElement>('.tool-button[data-tool]').forEach((button) => {
+  button.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    drag = {
+      tool: button.dataset.tool as SceneTool,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      pointerId: event.pointerId,
+    };
+  });
+});
+window.addEventListener('pointermove', (event) => {
+  const cursor = $('#tool-cursor');
+  if (drag && event.pointerType === 'mouse' && event.buttons === 0) drag = null;
+  if (drag && drag.pointerId === event.pointerId) {
+    if (!drag.active && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 10) {
+      drag.active = true;
+      selectTool(drag.tool);
+    }
+    if (drag.active) {
+      cursor.hidden = false;
+      cursor.classList.add('dragging');
+      cursor.style.left = `${event.clientX}px`;
+      cursor.style.top = `${event.clientY}px`;
+      return;
+    }
+  }
+  cursor.classList.remove('dragging');
+  const onWorld =
+    event.target === canvas &&
+    !document.querySelector('dialog[open]') &&
+    event.pointerType !== 'touch';
+  cursor.hidden = !onWorld || selectedTool === 'hand';
+  cursor.style.left = `${event.clientX}px`;
+  cursor.style.top = `${event.clientY}px`;
+});
+window.addEventListener(
+  'pointerup',
+  (event) => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const wasDragging = drag.active;
+    const tool = drag.tool;
+    drag = null;
+    if (!wasDragging) return;
+    blockToolClickUntil = performance.now() + 200;
+    $('#tool-cursor').hidden = true;
+    $('#tool-cursor').classList.remove('dragging');
+    const position = scene.getPetPosition();
+    const bounds = canvas.getBoundingClientRect();
+    const dx = event.clientX - bounds.left - position.x * bounds.width;
+    const dy = event.clientY - bounds.top - position.y * bounds.height;
+    const radius = innerWidth < 600 ? 78 : 112;
+    if (Math.hypot(dx / radius, dy / (radius * 1.3)) < 1) interactWithPet(tool);
+    event.stopPropagation();
+    event.preventDefault();
+  },
+  true,
+);
+window.addEventListener('blur', () => {
+  drag = null;
+  $('#tool-cursor').hidden = true;
+});
+window.addEventListener('pointercancel', () => {
+  drag = null;
+  $('#tool-cursor').hidden = true;
+  $('#tool-cursor').classList.remove('dragging');
+});
+function followPet() {
+  const position = scene.getPetPosition();
+  const bounds = canvas.getBoundingClientRect();
+  const x = position.x * bounds.width;
+  const y = position.y * bounds.height;
+  const proxy = $('#pet-interact');
+  proxy.style.left = `${x}px`;
+  proxy.style.top = `${y}px`;
+  $('.game-shell').style.setProperty('--pet-x', `${x}px`);
+  $('.game-shell').style.setProperty('--pet-y', `${y}px`);
+  if (!document.hidden) positionFrame = requestAnimationFrame(followPet);
+  else positionFrame = 0;
+}
+let positionFrame = requestAnimationFrame(followPet);
 window.addEventListener('storage', (event) => {
   if (event.key !== SAVE_KEY || !event.newValue) return;
   const restored = parseSave(event.newValue, Date.now());
@@ -491,12 +633,22 @@ window.addEventListener('pagehide', () => {
   reconcileSavedState();
   state = advanceTime(state, Date.now());
   persist();
+  if (positionFrame) cancelAnimationFrame(positionFrame);
+  positionFrame = 0;
+});
+window.addEventListener('pageshow', () => {
+  reconcileSavedState();
+  state = advanceTime(state, Date.now());
+  renderState();
+  if (!document.hidden && !positionFrame) positionFrame = requestAnimationFrame(followPet);
+  if (gameRunning && performance.now() >= gameEnds) finishGame();
 });
 document.addEventListener('visibilitychange', () => {
   reconcileSavedState();
   if (!document.hidden) {
     state = advanceTime(state, Date.now());
     renderState();
+    if (!positionFrame) positionFrame = requestAnimationFrame(followPet);
     if (gameRunning && performance.now() >= gameEnds) finishGame();
   }
   persist();
@@ -504,13 +656,34 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => {
   reconcileSavedState();
   state = advanceTime(state, Date.now());
-  if (activeView === 'home') renderState();
+  renderState();
   persist();
 }, 10000);
-$('#date-label').textContent = new Intl.DateTimeFormat('es-MX', {
-  day: 'numeric',
-  month: 'long',
-}).format(new Date());
+setInterval(() => {
+  if (
+    document.hidden ||
+    document.querySelector('dialog[open]') ||
+    gameRunning ||
+    Date.now() < sleepingUntil
+  )
+    return;
+  const needs = state.pet.needs;
+  say(
+    needs.hunger < 35
+      ? 'Mi pancita hace ruiditos…'
+      : needs.energy < 35
+        ? 'Me vendría bien una siestita.'
+        : needs.hygiene < 35
+          ? '¿Jugamos con unas burbujas?'
+          : [
+              '¿Qué habrá al final del sendero?',
+              'Qué bonito es estar aquí contigo.',
+              '¿Has visto las lucecitas?',
+              '¡Podría explorar todo el día!',
+            ][Math.floor(Math.random() * 4)],
+    4500,
+  );
+}, 25000);
 addEvent(
   initial
     ? `${state.pet.name} se alegra de verte de nuevo.`
@@ -518,7 +691,9 @@ addEvent(
   'leaf',
 );
 renderState();
-showView('home');
+renderBiomes();
+selectTool('hand');
 persist();
+say(initial ? '¡Volviste! ¿Damos una vuelta?' : 'Hola… ¿exploramos juntos?', 6500);
 if (corruptSave) toast('El guardado anterior estaba dañado. Creamos un nuevo hogar para empezar.');
 if (!saveAvailable) toast('El navegador no permite guardar. El progreso durará esta sesión.');
