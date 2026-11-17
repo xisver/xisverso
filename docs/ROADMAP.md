@@ -1,46 +1,40 @@
 # Ruta de Xisverso
 
-La prioridad es terminar ciclos jugables pequeños antes de ampliar el mundo. Los hitos se ordenan por dependencias y no representan fechas comprometidas.
+La prioridad es cerrar ciclos jugables pequeños antes de ampliar el mundo. El orden indica dependencias, no fechas comprometidas.
 
-| Hito                                       | Alcance                                                                                                                 | Criterio para avanzar                                                                                                                                 |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0. Base del proyecto                       | Identidad Xisverso, repositorio, estructura, decisiones y comandos de desarrollo.                                       | Otra persona puede instalar, ejecutar, probar y compilar el proyecto siguiendo el README.                                                             |
-| 1. Primera mascota — versión inicial       | Una criatura procedural, cuatro necesidades, acciones de cuidado, nombre editable, vínculo y guardado local.            | Cada acción responde de forma visible; las necesidades permanecen entre 0 y 100; cerrar y volver conserva la partida válida.                          |
-| 2. Primer ciclo de juego — versión inicial | Minijuego de luciérnagas, experiencia, monedas y selección de tres biomas de demostración.                              | La partida tiene principio y final; una sesión entrega una sola recompensa; los cambios de bioma conservan la identidad y el progreso.                |
-| 3. Refugio de biomas                       | Varias mascotas propias, especies originales, hábitats e inventario; diferencias jugables entre bosque, costa y tundra. | Se puede cuidar a cada mascota sin perder su estado; añadir una especie no exige reescribir la simulación ni el guardado.                             |
-| 4. Cuentas y visitas                       | Identidad, guardado remoto, amistades, permisos y visitas asincrónicas.                                                 | Un usuario solo modifica sus propios recursos; las visitas respetan permisos; hay recuperación de errores y política de migración del progreso local. |
-| 5. Convivencia en vivo                     | Salas privadas para 2–4 usuarios, gestos y actividades sencillas entre mascotas.                                        | Dos clientes ven el mismo resultado; salir o reconectar no duplica recursos; existen bloqueo y reporte.                                               |
-| 6. Minijuego multijugador                  | Una actividad cooperativa y, después, una competitiva.                                                                  | El servidor resuelve la partida y valida sus premios; reintentar una petición no vuelve a pagar una recompensa.                                       |
-| 7. Expansión                               | Más especies, biomas, decoración, evolución y actividades según el uso real.                                            | El contenido se amplía con datos y componentes reutilizables; las nuevas funciones conservan las partidas existentes.                                 |
+| Hito                               | Alcance                                                                           | Criterio para avanzar                                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Base                               | Identidad, repositorio, comandos y configuración de Pages.                        | Se puede instalar, probar, compilar y publicar siguiendo la guía.                             |
+| Refugio interactivo                | Mundo procedural, cuidados por toque/arrastre, paseo, teclado y móvil.            | La mascota y los controles permanecen utilizables en los tamaños comprobados.                 |
+| Crianza y convivencia local        | Huevo, joven, adulto, liberación, nuevo huevo y visitas a mascotas propias.       | Cada etapa se conserva; liberar no borra ni duplica adultos; viajar no altera el origen.      |
+| Exploración y cocina               | Ingredientes por bioma, hasta tres compañeros libres, recetas y comida preparada. | El inventario no se vuelve negativo; recargar conserva la expedición y no duplica materiales. |
+| Evoluciones alimentarias           | Definir ramas y rasgos según historial de recetas.                                | El diseño de dieta tiene reglas comprensibles y conserva identidad y partidas previas.        |
+| Cuentas y visitas                  | Identidad, guardado remoto, amistades y permisos.                                 | Cada usuario solo modifica sus recursos y existe una política de migración local.             |
+| Convivencia en vivo                | Salas privadas pequeñas, gestos y actividades entre usuarios.                     | Dos clientes ven el mismo resultado; reconectar no duplica recursos; hay bloqueo y reporte.   |
+| Minijuegos compartidos y expansión | Cooperación, competición, nuevas especies, biomas y objetos.                      | El servidor valida resultados y premios; añadir contenido no obliga a rehacer el cuidado.     |
 
-## Diseño del cuidado
+## Iteración de crianza
 
-- El bienestar importa más que acumular tareas repetitivas.
-- La ausencia no causa muerte permanente; el deterioro tiene un límite configurable.
-- El vínculo abre expresiones y comportamientos antes que ventajas competitivas.
-- Cada bioma debe cambiar alguna decisión de cuidado, exploración o juego.
-- Las variantes visuales de una criatura conservan una identidad estable mediante una semilla.
+El siguiente ciclo une incubar, cuidar, crecer, dejar libre, explorar y cocinar para otra cría. Los adultos permanecen en el bioma donde se liberaron y pueden volver a encontrarse con su nuevo compañero. La colección y las interacciones de esta etapa pertenecen a una misma partida local.
+
+El origen del huevo fija características procedurales. `currentBiome` solo representa una visita; no cambia a una criatura de bosque por otra de costa. La costa usa su paisaje propio y los residentes conservan sus rasgos de origen.
+
+La alimentación se registra para diseñar evoluciones futuras. En esta etapa no hay ramas alimentarias ni cambios de aspecto causados por una receta.
+
+## Criterios de verificación
+
+- Hambre usa 0 como ausencia de hambre; comer la reduce y el tiempo la aumenta.
+- Las etapas y el progreso sobreviven a una recarga. Las partidas v1 migran sin perder identidad ni progreso.
+- Solo se libera un adulto y ese compañero queda visitable; una segunda operación no duplica la criatura.
+- Una exploración tiene como máximo tres adultos libres distintos, conserva su bioma de salida y entrega materiales una vez.
+- Cocinar consume todos los ingredientes de manera atómica y alimentar consume una porción preparada.
+- Las luciérnagas son visibles y activables; las recompensas de una partida se entregan una sola vez.
+- Los controles mantienen alternativas de teclado y funcionan en móvil vertical y horizontal.
 
 ## Antes de abrir la comunidad
 
-Definir edades y audiencia, normas de interacción, permisos de visita, bloqueo y reporte. Empezar con gestos predefinidos en vez de chat libre. Separar la simulación decorativa de las acciones que consumen o entregan recursos.
+Definir edades y audiencia, permisos de visita, normas, bloqueo y reporte. Empezar con gestos predefinidos. El servidor deberá validar identidad, propiedad, inventario y resultados, sin aceptar el guardado local como prueba de recursos legítimos.
 
-El guardado local es modificable. Su conversión a una cuenta requerirá una decisión explícita: importar como progreso casual sin clasificaciones, validarlo con límites o empezar una economía en línea independiente. No se debe aceptar como prueba una cantidad de monedas enviada por el cliente.
+La reproducción entre mascotas, los intercambios, la economía entre usuarios y un mundo masivo se evaluarán después de validar crianza, exploración y convivencia básica.
 
-## Ideas para evaluar después
-
-Reproducción, intercambio de criaturas, economía entre usuarios, mundo masivo y chat libre. Son propuestas abiertas: cada una cambia el equilibrio y la operación del juego, por lo que se decidirán después de validar el cuidado y la convivencia básica.
-
-## Estado del arranque — 17 de noviembre de 2026
-
-Los hitos 1 y 2 están implementados como prototipo local: una mascota procedural, cuidados, guardado, tres biomas de demostración y el minijuego. La base local está preparada; la creación y subida del repositorio remoto depende de completar la autenticación de GitHub CLI. Los hitos 3–7 siguen pendientes.
-
-La verificación inicial incluyó 13 pruebas de simulación y 7 pruebas de flujos de interfaz. El flujo de GitHub Actions está configurado para comprobar simulación y compilación cuando el repositorio se publique; todavía no se ha ejecutado remotamente.
-
-## Refugio interactivo
-
-La experiencia principal ahora es un mundo a pantalla completa: tocar el suelo hace caminar a la mascota y las herramientas se usan directamente sobre ella. Comida, burbujas y caricias también admiten arrastre. Los viajes, la bitácora y el bienestar se consultan en diálogos a demanda; la partida conserva el esquema v1.
-
-Antes de ampliar el número de mascotas, validar que el paseo, los gestos y las señales de necesidad resulten claros y agradables. La siguiente evolución puede incorporar objetos utilizables del entorno y pequeñas actividades dentro del propio refugio.
-
-Verificación del refugio: 13 pruebas de simulación y 12 de interacción, incluyendo arrastre, partidas anteriores, móvil vertical, pantalla horizontal y movimiento reducido.
+Verificación de la iteración de crianza: 27 pruebas de dominio y 17 recorridos de interfaz. También se comprobó el juego compilado bajo `/xisverso/`, incluido el huevo, su incubación y el guardado v2.

@@ -1,60 +1,49 @@
-# Decisiones iniciales
+# Decisiones de Xisverso
 
-Fecha: 17 de noviembre de 2026. Estas decisiones pueden revisarse a partir de las pruebas del juego.
+Estas decisiones pueden revisarse con las pruebas del juego.
 
-## Identidad
+## Identidad y plataforma
 
-**Xisverso** combina Xisver y universo. El desarrollo se firma como **XisSoft** y el lema inicial es «Un mundo vivo de XisSoft». El nombre es una decisión creativa del proyecto; no equivale a una búsqueda o registro de marca.
+**Xisverso** combina Xisver y universo. El desarrollo se firma **XisSoft** y el lema inicial es «Un mundo vivo de XisSoft». Se comienza con navegador, TypeScript, Vite y Canvas 2D para compartir una base entre computadora y móvil.
 
-## Plataforma inicial
+## Arte procedural e identidad estable
 
-Comenzar con una aplicación de navegador en TypeScript, Vite y Canvas 2D. Esta ruta permite probar desde computadora y móvil con una misma base. Instalar como aplicación, publicar en tiendas o crear una versión de escritorio son decisiones posteriores.
+Huevos, cuerpos, rasgos y fondos se construyen con formas y curvas. La semilla y el bioma donde se crea un huevo fijan la identidad visual de esa mascota. Visitar otro lugar cambia el paisaje, no la especie ni su aspecto.
 
-## Mascotas y escenarios por código
+La etapa de vida puede cambiar tamaño, proporciones y detalles de la criatura. Las evoluciones condicionadas por alimentación se definirán después; por ahora se registra la dieta y el crecimiento sigue un ciclo general de huevo, joven y adulto.
 
-Construir cuerpos, rasgos y fondos con formas y curvas. Utilizar semillas para variaciones reproducibles y parámetros para expresar estados. Evitar la dependencia inicial de sprites o modelos externos.
+La simulación permanece separada del dibujo. Si se decide incorporar 3D, sus reglas de cuidado, identidad y guardado seguirán siendo aprovechables.
 
-La simulación y la apariencia permanecen separadas. Si las pruebas justifican el 3D, se podrá añadir un renderizador y preparar modelos procedurales en Blender manteniendo las reglas de cuidado.
+Referencias de las APIs utilizadas: [formas en Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Drawing_shapes), [animación](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Basic_animations) y [movimiento reducido](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
 
-Referencias técnicas primarias:
+## Crecer y dejar vivir
 
-- [Formas en Canvas — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Drawing_shapes)
-- [Animación en Canvas — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Basic_animations)
-- [Movimiento reducido — MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion)
+Un huevo recibe calor, nace como joven y crece hasta adulto. Los tiempos son breves y configurables para probar el ciclo. El adulto se puede dejar libre en el lugar visitado: permanece disponible para visitarlo, convivir y acompañar expediciones. Esto abre la crianza de otro huevo sin borrar al compañero anterior.
+
+Las mascotas libres pertenecen a la partida local. Su interacción inicial sirve para validar compañía dentro de un mismo mundo antes de construir convivencia entre usuarios.
+
+## Cuidado y cocina
+
+La escala de **Hambre** expresa necesidad de comer: 0 significa ausencia de hambre y 100 mucha hambre. Energía, higiene y ánimo son bienestar: altos es mejor. Todas permanecen entre 0 y 100 y la ausencia no causa muerte permanente.
+
+La exploración proporciona ingredientes y la cocina los convierte en porciones. Alimentar consume comida preparada, mientras que elegir o transportar una herramienta no gasta recursos. El jugador puede reunir ingredientes aunque su nueva mascota todavía sea un huevo.
+
+## Explorar en grupo
+
+El letrero del mundo abre exploraciones. Se pueden invitar hasta tres adultos libres; un grupo mayor consigue más materiales. El bioma, los acompañantes y el resultado previsto se fijan al salir para que cambiar de lugar o recargar no permita modificar el resultado. La recompensa se entrega una vez al reclamarla.
 
 ## Jugar dentro del refugio
 
-La escena es la pantalla principal. Interactuar significa tocar el suelo para caminar, elegir una herramienta y usarla sobre la mascota, o acercar la herramienta mediante arrastre. La selección por sí sola no consume recursos.
+La escena es la pantalla principal. Jóvenes y adultos caminan al tocar el suelo; la mascota responde a herramientas por toque, teclado o arrastre. El bienestar, el crecimiento, los viajes, la colección y la cocina se consultan en diálogos a demanda.
 
-Los valores numéricos de bienestar y progreso se consultan cuando hacen falta. Los gestos, el movimiento, los pensamientos y las reacciones de la criatura transmiten su presencia durante el juego. Ratón, tacto y teclado deben ofrecer caminos equivalentes para los cuidados.
+## Persistencia y comunidad
 
-El rediseño conserva el guardado `xisverso.save.v1`. La posición de paseo y la herramienta actual son estado visual de sesión; no cambian el progreso guardado ni requieren migrar partidas existentes.
+El nuevo esquema v2 migra partidas v1 y conserva el respaldo anterior. La mascota previa se mantiene como adulta, el progreso permanece y la antigua saciedad se convierte en hambre.
 
-## Cuidado amable
+La economía local es modificable. Antes de cuentas o clasificaciones se decidirá cómo importar ese progreso; un servidor deberá validar propiedad, recursos y resultados. Las futuras salas serán privadas y pequeñas.
 
-Usar cuatro necesidades con escala de 0 a 100: saciedad, energía, higiene y ánimo. El abandono temporal no provoca muerte permanente. Limitar el deterioro por ausencia para permitir regresar a una partida recuperable.
+## Derechos y decisiones abiertas
 
-## Alcance de la demostración
+Los derechos se reservan a XisSoft. No se incorpora una licencia de código abierto ni un servicio de pago sin una decisión expresa del propietario.
 
-Una mascota y tres biomas seleccionables permiten comprobar la dirección visual. La gestión de varias mascotas, las especies desbloqueables y un sistema de hábitats completo pertenecen a etapas posteriores. Monedas, experiencia y recompensas son locales y carecen de valor real.
-
-## Persistencia local primero
-
-El prototipo guarda un estado versionado en el navegador. Antes de cuentas o clasificaciones se definirá cómo migrar un progreso que el usuario puede modificar. No se tratará el estado local como una fuente confiable de recursos en línea.
-
-## Social por capas
-
-Implementar cuentas y visitas asincrónicas antes de salas privadas en vivo. El servidor será la autoridad de los recursos, la propiedad y los resultados de juego. Iniciar las interacciones con gestos predefinidos y actividades pequeñas.
-
-## Repositorio y derechos
-
-Crear el repositorio de GitHub inicialmente privado. No añadir una licencia de código abierto sin una decisión expresa del propietario. Los derechos se reservan a XisSoft durante esta etapa de desarrollo.
-
-## Pendientes de decisión
-
-- Público y edades a quienes va dirigido el juego.
-- Reglas de crecimiento, evolución y personalidad.
-- Número de mascotas y coste de mantener hábitats.
-- Política de importación del guardado local a una cuenta.
-- Infraestructura y presupuesto para persistencia y salas remotas.
-- Publicación, distribución y licencia definitiva.
+Quedan abiertos: público y edades, duración definitiva de crianza, ramas de evolución según recetas y dieta, especies, equilibrio de exploración y cocina, infraestructura de cuentas y presupuesto para salas remotas.

@@ -2,45 +2,54 @@
 
 **Un mundo vivo de XisSoft.**
 
-Xisverso nace de **Xisver + universo**: un juego de simulación de mascotas originales, con personalidad y afinidad por distintos biomas. El ciclo del juego es cuidar, jugar, mejorar el refugio y descubrir nuevas posibilidades de convivencia.
+Xisverso combina **Xisver + universo**. Es un juego local de mascotas originales: incubar, cuidar, explorar, cocinar y volver a encontrarse con las criaturas que han crecido contigo. Mascotas, huevos y escenarios se dibujan en Canvas 2D, sin sprites ni modelos externos.
 
-Esta primera versión es un prototipo local para validar que cuidar y jugar con una criatura resulte agradable. Las mascotas y los escenarios se dibujan y animan por código en Canvas 2D: no requieren sprites, modelos 3D ni servicios de generación de imágenes.
+## Qué puedes hacer
 
-## Primera versión
+- Criar una mascota desde **huevo → joven → adulto**, con nombre editable, necesidades, vínculo y progreso.
+- Dar calor al huevo con Caricias; después de nacer, alimentar, bañar, acariciar y descansar dentro del refugio.
+- Dejar libre a una mascota adulta en el bioma que visitas y empezar a cuidar un nuevo huevo. Los adultos siguen en tu colección y puedes visitarlos.
+- Interactuar con tus mascotas libres cuando están en el mismo bioma que tu compañero nacido.
+- Viajar entre Bosque Susurro, Costa Nácar y Tundra Aurora. Viajar cambia el escenario, no el origen ni la apariencia de una mascota.
+- Explorar para conseguir ingredientes; puedes invitar a **hasta tres mascotas libres** para traer más materiales.
+- Preparar recetas con los ingredientes de la mochila y dar la comida preparada a tu mascota.
+- Jugar a atrapar luciérnagas durante 20 segundos.
+- Guardar automáticamente el progreso en este navegador, con recuperación de partidas de la primera versión.
 
-- Una mascota inicial llamada Nubi, con nombre editable y apariencia procedural reproducible.
-- Cuatro necesidades: saciedad, energía, higiene y ánimo.
-- Un refugio que ocupa el área de juego, con paseo e interacción directa con la mascota.
-- Herramientas de caricias, comida, burbujas y siesta: se seleccionan y se usan sobre la criatura; también se pueden arrastrar.
-- Bosque, costa y tundra disponibles como biomas de demostración.
-- Un minijuego de recoger luciérnagas durante 20 segundos.
-- Guardado automático en el navegador y cálculo limitado del tiempo transcurrido al volver.
-- Interfaz en español, adaptable a móvil, con controles táctiles y de teclado; bienestar, vínculo y experiencia en una ficha a demanda.
-
-El guardado pertenece a este navegador y dispositivo. Borrar los datos del navegador elimina la partida. La economía local puede modificarse desde el propio equipo y todavía no sirve como base de un modo competitivo.
+Todo lo anterior ocurre entre mascotas de tu propia partida. Las cuentas, visitas a otros usuarios y partidas multijugador siguen planificadas.
 
 ## Cómo jugar
 
-- Toca o haz clic en el suelo para que tu mascota camine hacia ese lugar.
-- Elige Caricias, Comida, Burbujas o Siesta y toca a la mascota para usar la herramienta. Elegirla no consume semillas; dar de comer cuesta 5 semillas.
-- También puedes llevar una herramienta desde la barra hasta la mascota mediante arrastre. En táctil siempre puedes seleccionar y tocar.
-- Pulsa el nombre de tu compañero para consultar cómo está o cambiar su nombre.
-- Explora otros biomas desde el indicador del lugar o el letrero del sendero. El acceso de luciérnagas y el botón Jugar abren el minijuego.
-- El menú reúne la bitácora de esta sesión y el próximo capítulo de comunidad.
-- Con teclado, 1–4 seleccionan herramientas y las flechas indican un destino. Tab y Enter permiten recorrer y activar los controles, incluida la mascota.
+Toca el huevo para darle calor. Cuando nazca, toca el suelo para caminar y elige Caricias, Comida, Burbujas o Siesta antes de tocar a la mascota. También puedes arrastrar una herramienta hasta ella. La comida consume una porción preparada; seleccionar una herramienta no gasta recursos.
 
-Las partidas de la primera versión se conservan: el rediseño usa el mismo esquema `xisverso.save.v1`. La mascota empieza cada sesión en el centro del refugio; su identidad, nombre, necesidades y progreso permanecen guardados.
+Pulsa el nombre de tu compañero para consultar **Hambre**, energía, higiene, ánimo y crecimiento. **Hambre baja es mejor**: 0 significa que acaba de comer y 100 que tiene mucha hambre. Las otras tres necesidades funcionan al contrario: cuanto más altas, mejor.
+
+El letrero de exploración permite iniciar una salida y recoger sus materiales cuando termine. Selecciona hasta tres adultos de tu colección para acompañarte. La cocina muestra qué ingredientes necesitas, qué puedes preparar y cuántas porciones tienes.
+
+El bioma donde se crea el huevo fija sus rasgos procedurales. Llevar esa mascota de visita a otro bioma no la transforma. Al liberar un adulto, su hogar será el bioma actual; puedes volver a verlo allí y criar otro huevo.
+
+El menú reúne tus mascotas, la cocina, la bitácora de esta sesión y el próximo capítulo de comunidad. Con teclado, 1–4 seleccionan herramientas y las flechas indican un destino para las mascotas nacidas. Tab y Enter recorren y activan los controles, incluida la mascota.
+
+Los ritmos de crecimiento son cortos y configurables para probar el ciclo: el huevo tarda 60 segundos y la etapa joven 10 minutos. Dar calor al huevo añade 10 segundos de progreso; los cuidados y la comida también aceleran el crecimiento. La alimentación queda registrada por receta, pero **todavía no decide ramas de evolución ni cambios de aspecto**: ese diseño se definirá después.
+
+## Guardados y límites
+
+La partida actual usa `xisverso.save.v2`. Si v2 falta o está dañado y existe un respaldo válido `xisverso.save.v1`, se recupera y migra conservando identidad, nombre, semillas, experiencia y récord. La mascota anterior se conserva como adulta y el antiguo valor de saciedad se convierte en hambre. El guardado v1 queda disponible como respaldo.
+
+El navegador y el dispositivo conservan su propia partida. Borrar sus datos elimina el guardado; abrir el juego desde otro origen, como GitHub Pages, crea un guardado independiente. La ausencia tiene un límite de deterioro y no provoca muerte permanente.
+
+La economía y el inventario son locales y modificables desde el equipo. Todavía no sirven como autoridad para un modo competitivo o compartido entre usuarios.
 
 ## Ejecutar con PowerShell
 
-Requiere Node.js con soporte para ejecutar TypeScript nativo. El entorno inicial de desarrollo utiliza Node.js 24.
+Requiere Node.js 24 y npm.
 
 ```powershell
 npm.cmd install
 npm.cmd run dev
 ```
 
-Abre manualmente http://127.0.0.1:4173/ o la dirección local que muestra Vite en la terminal. El comando no toma el control del navegador.
+Abre personalmente http://127.0.0.1:4173/ o la dirección que muestre Vite. El comando no controla ventanas ni el navegador.
 
 ```powershell
 npm.cmd test
@@ -48,42 +57,32 @@ npm.cmd run build
 npm.cmd run preview
 ```
 
-`npm test` verifica las reglas de la simulación; `npm run build` comprueba TypeScript y genera la aplicación en `dist/`. En PowerShell también pueden utilizarse `npm install`, `npm run dev`, `npm test` y `npm run build` cuando la política de ejecución permita el lanzador `npm.ps1`.
-
-## Próximas etapas
-
-Las cuentas, el guardado en línea, varias mascotas simultáneas, las visitas entre usuarios, la convivencia en vivo y los minijuegos multijugador están **planificados**. Esta versión no incluye usuarios remotos ni simula jugadores conectados.
-
-Antes del modo social incorporaremos un servidor que valide propiedad de las mascotas, inventario, resultados y recompensas. Las salas iniciales serán privadas y pequeñas; el diseño de la comunidad se definirá junto con las pruebas del juego.
-
-- [Ruta del proyecto](docs/ROADMAP.md)
-- [Arquitectura](docs/ARCHITECTURE.md)
-- [Decisiones de diseño y tecnología](docs/DECISIONS.md)
-
-## Desarrollo
-
-Tecnologías: TypeScript, Vite, Canvas 2D y APIs del navegador. La simulación está separada del dibujo y de la interfaz para permitir cambiar el estilo visual o incorporar 3D sin reconstruir las reglas del cuidado.
-
-**Desarrollado por XisSoft.** Copyright © 2026 XisSoft. Todos los derechos reservados. No se concede una licencia de código abierto en esta etapa.
+`npm test` verifica las reglas de la simulación; `npm run build` comprueba TypeScript y genera `dist/`.
 
 ## Verificación de la interfaz
 
 ```powershell
 npm.cmd run test:e2e
+npm.cmd run check:pages
 ```
 
-Las pruebas utilizan el puerto local 4174, separado del servidor de desarrollo 4173. Las pruebas usan una instancia aislada de Google Chrome sin ventana, lanzada desde PowerShell. No usan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado; la compilación y las pruebas de simulación no necesitan navegador.
+Las pruebas de interfaz usan el puerto 4174 y una instancia aislada de Chrome sin ventana; no utilizan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado. `check:pages` valida además la compilación servida bajo `/xisverso/`.
 
-Cubren selección y uso de herramientas sobre la mascota, desplazamiento sin gastos, arrastre, cambio de nombre, partidas anteriores v1, biomas, tamaños móviles, teclado, finalización y abandono del minijuego, guardados dañados, almacenamiento bloqueado y sincronización entre pestañas. Las capturas se generan en `artifacts/`, que no se versiona.
+Las pruebas cubren migración, hambre, herramientas, crecimiento, liberación, visitas, exploración, cocina, interacción entre mascotas propias, luciérnagas, tamaños móviles y persistencia. La lógica de dominio se prueba por separado del DOM.
 
-También puedes iniciar el proyecto con `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`. El parámetro de ejecución se aplica solo a ese proceso, sin cambiar la configuración del sistema.
+También puedes ejecutar `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`. La opción de ejecución se aplica solo a ese proceso.
 
-## GitHub y GitHub Pages
+## Desarrollo y publicación
 
-El repositorio previsto es `xisver/xisverso` y el juego puede publicarse en `https://xisver.github.io/xisverso/`. La configuración y los scripts están preparados localmente; falta completar la autenticación y la publicación remota.
+Tecnologías: TypeScript, Vite, Canvas 2D y APIs del navegador. La simulación está separada del dibujo y la interfaz; así podremos ampliar el contenido sin reconstruir el cuidado ni el guardado.
 
-Sigue la [guía completa con comandos PowerShell](docs/GITHUB_PAGES.md) para instalar GitHub CLI, subir el proyecto y activar Pages. Puedes elegir `-Visibility public` para Pages con GitHub Free, o `-Visibility private` si tu plan lo permite. Los scripts no cambian automáticamente la visibilidad de un repositorio existente.
+- [Ruta del proyecto](docs/ROADMAP.md)
+- [Arquitectura](docs/ARCHITECTURE.md)
+- [Decisiones de diseño y tecnología](docs/DECISIONS.md)
+- [Publicar en GitHub Pages con PowerShell](docs/GITHUB_PAGES.md)
 
-`npm.cmd run build:pages` genera las rutas para `/xisverso/`; `npm.cmd run check:pages` verifica la compilación bajo ese subdirectorio con Chrome sin ventana. El workflow publica automáticamente los siguientes pushes a `main` una vez activado Pages.
+El repositorio previsto es `xisver/xisverso` y la publicación de Pages utiliza `https://xisver.github.io/xisverso/`. `build:pages` genera esa ruta y el workflow publica los pushes a `main` cuando Pages está activado. Los scripts de publicación no cambian automáticamente la visibilidad de un repositorio existente.
 
-El nombre del producto ya es Xisverso. La carpeta física conserva por ahora `TAMAGOTCHI` porque Windows impide renombrarla mientras la sesión actual la utiliza.
+El producto se llama Xisverso; la carpeta física conserva `TAMAGOTCHI` mientras la sesión actual la utiliza.
+
+**Desarrollado por XisSoft.** Copyright © 2026 XisSoft. Todos los derechos reservados. No se concede una licencia de código abierto en esta etapa.

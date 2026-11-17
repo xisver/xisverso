@@ -55,16 +55,28 @@ try {
   await page.goto(origin + prefix);
   await expect(page.locator('#pet-name')).toHaveText('Nubi');
   assert.equal((await page.request.get(origin + prefix + 'favicon.svg')).status(), 200);
-  await page.getByRole('button', { name: 'Comida', exact: true }).click();
+  const saveKey = 'xisverso.save.v2';
+  const before = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
+  assert.equal(before.version, 2);
+  assert.equal(before.pet.stage, 'egg');
+  await page.getByRole('button', { name: 'Caricias', exact: true }).click();
   const pet = await page.locator('#pet-interact').boundingBox();
   assert.ok(pet);
   await page.mouse.click(pet.x + pet.width / 2, pet.y + pet.height / 2);
-  await expect(page.locator('#coins')).toHaveText('75');
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => JSON.parse(localStorage.getItem(key)).pet.growthSeconds, saveKey),
+    )
+    .toBeGreaterThan(before.pet.growthSeconds + 8);
+  const warmed = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
   await page.reload();
-  await expect(page.locator('#coins')).toHaveText('75');
+  const restored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
+  assert.equal(restored.version, 2);
+  assert.equal(restored.pet.id, before.pet.id);
+  assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: JavaScript, CSS, favicon, mascota, cuidados y guardado funcionan bajo /xisverso/.',
+    'PAGES_OK: JavaScript, CSS, favicon, huevo, calor y guardado v2 funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();

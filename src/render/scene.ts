@@ -1,14 +1,27 @@
 /** Xisverso: every shape is drawn at runtime, without image or model assets. */
 export interface ScenePet {
+  id?: string;
+  worldBiome?: 'forest' | 'coast' | 'tundra';
+  stage?: 'egg' | 'young' | 'adult';
+  companions?: SceneCompanion[];
   seed: number;
   biome: 'forest' | 'coast' | 'tundra';
   mood: string;
   sleeping: boolean;
 }
 
+export interface SceneCompanion {
+  id: string;
+  name: string;
+  seed: number;
+  biome: 'forest' | 'coast' | 'tundra';
+  stage: 'adult';
+}
+
 export type SceneTool = 'hand' | 'feed' | 'clean' | 'rest';
 export interface SceneOptions {
   onPetInteract?: (tool: SceneTool) => void;
+  onCompanionInteract?: (id: string) => void;
   onWalk?: (x: number, y: number) => void;
 }
 type Reaction = 'feed' | 'clean' | 'rest' | 'pet' | 'win';
@@ -46,6 +59,7 @@ export function createScene(
   setTool(tool: SceneTool): void;
   walkTo(x: number, y: number): void;
   getPetPosition(): { x: number; y: number };
+  reactTogether(id: string): void;
 } {
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Tu navegador necesita Canvas 2D para mostrar la mascota.');
@@ -58,6 +72,8 @@ export function createScene(
   let clock = 0;
   let reaction: Reaction | null = null;
   let reactionUntil = 0;
+  let socialId: string | null = null;
+  let socialUntil = 0;
   let particles: Particle[] = [];
   let tool: SceneTool = 'hand';
   let position = { x: 0.5, y: 0.57 };
@@ -72,8 +88,6 @@ export function createScene(
   let height = 1;
   let pointer = 0;
   let targetPointer = 0;
-  let renderedSeed = pet.seed;
-  let appearance = seeded(pet.seed)();
   const landmarks = Array.from({ length: 30 }, (_, i) => {
     const random = seeded(i * 163 + 42);
     return {
@@ -97,7 +111,7 @@ export function createScene(
     ctx.lineJoin = 'round';
     ctx.stroke();
   }
-  function path(fill: string, draw: () => void) {
+  function path(fill: string | CanvasGradient, draw: () => void) {
     ctx.beginPath();
     draw();
     ctx.fillStyle = fill;
@@ -196,9 +210,35 @@ export function createScene(
     ctx.restore();
   }
 
+  function worldBiome() {
+    return pet.worldBiome ?? pet.biome;
+  }
+  function palm(x: number, y: number, size: number) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size, size);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(24, -100, -6, -205);
+    stroke('#b0a079', 15);
+    for (let index = 0; index < 7; index++) {
+      ctx.save();
+      ctx.translate(-6, -205);
+      ctx.rotate(-Math.PI + index * 0.48);
+      path(index % 2 ? '#6b9b7c' : '#7ca88a', () => {
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(65, -38, 106, 17);
+        ctx.quadraticCurveTo(54, -1, 0, 0);
+      });
+      ctx.restore();
+    }
+    ellipse(-14, -190, 10, 13, '#9b8862');
+    ellipse(1, -185, 9, 12, '#a3916e');
+    ctx.restore();
+  }
   function background() {
-    const coast = pet.biome === 'coast';
-    const tundra = pet.biome === 'tundra';
+    const coast = worldBiome() === 'coast';
+    const tundra = worldBiome() === 'tundra';
     const sky = ctx.createLinearGradient(0, 0, 0, WORLD_H);
     sky.addColorStop(0, tundra ? '#dce8ef' : coast ? '#dceee6' : '#e9edda');
     sky.addColorStop(1, tundra ? '#f3efe8' : coast ? '#f5edce' : '#f3eed8');
@@ -228,32 +268,9 @@ export function createScene(
           y = 450 + item.y * 100;
         ellipse(x, y, 9 * item.size, 4 * item.size, '#cabc91');
       }
-      // Curved palms frame the cove.
-      for (const [x, y, scale] of [
-        [105, 430, 1.08],
-        [925, 405, 0.83],
-      ]) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.scale(scale, scale);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(24, -100, -6, -205);
-        stroke('#b0a079', 15);
-        for (let i = 0; i < 7; i++) {
-          const angle = -Math.PI + i * 0.48;
-          ctx.save();
-          ctx.translate(-6, -205);
-          ctx.rotate(angle);
-          path(i % 2 ? '#6b9b7c' : '#7ca88a', () => {
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(65, -38, 106, 17);
-            ctx.quadraticCurveTo(54, -1, 0, 0);
-          });
-          ctx.restore();
-        }
-        ctx.restore();
-      }
+      // Coastal plants stay coastal in both landscape and portrait.
+      palm(105, 430, 1.08);
+      palm(925, 405, 0.83);
       // Shells and a starfish.
       ctx.save();
       ctx.translate(760, 466);
@@ -422,16 +439,21 @@ export function createScene(
     });
   }
 
-  function creature() {
-    const coast = pet.biome === 'coast';
-    const tundra = pet.biome === 'tundra';
-    const active = reaction !== null && clock < reactionUntil;
+  function creature(model: ScenePet = pet, companion = false) {
+    const coast = model.biome === 'coast';
+    const tundra = model.biome === 'tundra';
+    const appearance = seeded(model.seed)();
+    const moving = !companion && walking;
+    const looking = companion ? 0 : pointer;
+    const active = companion
+      ? model.id === socialId && clock < socialUntil
+      : reaction !== null && clock < reactionUntil;
     const happy = active && reaction !== 'rest';
-    const sleepy = pet.sleeping || (active && reaction === 'rest');
+    const sleepy = model.sleeping || (!companion && active && reaction === 'rest');
     const bounce = !motion.matches
       ? happy
         ? Math.abs(Math.sin((reactionUntil - clock) * 7)) * 14
-        : walking
+        : moving
           ? Math.abs(Math.sin(walkPhase)) * 8
           : 0
       : 0;
@@ -440,13 +462,13 @@ export function createScene(
     const shade = coast ? '#64a4aa' : tundra ? '#9c91b5' : '#8fa56a';
     const light = coast ? '#a4d0ce' : tundra ? '#cec5d9' : '#c2d09d';
     const ink = '#35483d';
-    const offset = pointer * 3;
+    const offset = looking * 3;
     ellipse(522, 472, 99 - bounce * 0.45, 17 - bounce * 0.1, '#40583a19');
     ellipse(522, 471, 75, 9, '#40583a13');
     ctx.save();
     ctx.translate(522 + offset, 344 - bounce);
     ctx.rotate(
-      motion.matches ? 0 : walking ? Math.sin(walkPhase) * 0.035 : Math.sin(clock * 1.4) * 0.012,
+      motion.matches ? 0 : moving ? Math.sin(walkPhase) * 0.035 : Math.sin(clock * 1.4) * 0.012,
     );
     ctx.scale(1 + breathing * 0.001, 1 + breathing * 0.003);
     // Tail stays behind the silhouette.
@@ -501,8 +523,8 @@ export function createScene(
       ctx.restore();
     }
     // Feet are separate to keep the idle movement readable.
-    ellipse(-57, 111 - (walking ? Math.max(0, Math.sin(walkPhase)) * 9 : 0), 31, 15, shade, -0.12);
-    ellipse(57, 111 - (walking ? Math.max(0, -Math.sin(walkPhase)) * 9 : 0), 31, 15, shade, 0.12);
+    ellipse(-57, 111 - (moving ? Math.max(0, Math.sin(walkPhase)) * 9 : 0), 31, 15, shade, -0.12);
+    ellipse(57, 111 - (moving ? Math.max(0, -Math.sin(walkPhase)) * 9 : 0), 31, 15, shade, 0.12);
     const bodyGradient = ctx.createLinearGradient(-60, -100, 80, 120);
     bodyGradient.addColorStop(0, light);
     bodyGradient.addColorStop(0.5, base);
@@ -537,9 +559,9 @@ export function createScene(
     ellipse(-58, 17, 17, 9, coast ? '#e9b5a1' : tundra ? '#dbaeb9' : '#dfb599');
     ellipse(58, 17, 17, 9, coast ? '#e9b5a1' : tundra ? '#dbaeb9' : '#dfb599');
     const blink = !motion.matches && Math.sin(clock * 0.73 + appearance * 4) > 0.989;
-    const sad = /trist|cansad|hambr|suci|agotad/i.test(pet.mood);
+    const sad = /trist|cansad|hambr|suci|agotad/i.test(model.mood);
     for (const side of [-1, 1]) {
-      const x = side * 36 + pointer * 2;
+      const x = side * 36 + looking * 2;
       if (sleepy || blink || happy) {
         ctx.beginPath();
         ctx.moveTo(x - 11, -3);
@@ -600,6 +622,25 @@ export function createScene(
       leaf(3, -117, 17, -0.8, '#789957');
       leaf(6, -121, 16, 0.8, '#91aa65');
     }
+    if (model.stage === 'adult') {
+      if (coast) {
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(side * 70, 51);
+          ctx.quadraticCurveTo(side * 95, 42, side * 102, 32);
+          stroke('#d5e8d2', 3);
+        }
+        ellipse(-18, -97, 9, 6, '#ebc6a0');
+        ellipse(18, -97, 9, 6, '#ebc6a0');
+      } else if (tundra) {
+        for (let tuft = -2; tuft <= 2; tuft++)
+          ellipse(tuft * 19, 78 + Math.abs(tuft) * 3, 15, 12, '#eee8e3');
+      } else {
+        leaf(-9, -120, 13, -1.45, '#79985b');
+        leaf(14, -125, 13, 1.25, '#89a563');
+        for (const side of [-1, 1]) leaf(side * 73, 75, 17, side * 1.05, '#829f61');
+      }
+    }
     if (sleepy) {
       ctx.font = '600 24px system-ui, sans-serif';
       ctx.fillStyle = '#667d76';
@@ -620,7 +661,7 @@ export function createScene(
     ctx.restore();
   }
 
-  function petScale(): number {
+  function basePetScale(): number {
     const bodyWidth =
       width < 600 ? Math.min(152, width * 0.36) : Math.min(220, Math.max(176, width * 0.16));
     const compactLandscape = width > 700 && height <= 500;
@@ -628,6 +669,145 @@ export function createScene(
       ? Math.min(0.48, Math.max(0.18, (height - 220) / 315))
       : Math.max(0.3, (height - 230) / 315);
     return Math.min(bodyWidth / 220, availableScale);
+  }
+  function petScale(): number {
+    return basePetScale() * (pet.stage === 'young' ? 0.78 : pet.stage === 'egg' ? 0.9 : 1);
+  }
+  function companionScale(): number {
+    return basePetScale() * (width < 600 ? 0.58 : 0.64);
+  }
+  function companionLocation(index: number, id: string) {
+    const slots =
+      width < 600
+        ? [
+            { x: 0.18, y: 0.63 },
+            { x: 0.82, y: 0.63 },
+            { x: 0.77, y: 0.43 },
+          ]
+        : [
+            { x: 0.29, y: 0.63 },
+            { x: 0.75, y: 0.62 },
+            { x: 0.16, y: 0.45 },
+          ];
+    const slot = slots[index % slots.length];
+    const scale = companionScale();
+    const compact = width > 700 && height <= 500;
+    const bottomSafe = compact ? 118 : width < 600 ? 165 : 176;
+    let x = slot.x;
+    let y = Math.max(
+      (96 + 178 * scale) / height,
+      Math.min(slot.y, (height - bottomSafe - 140 * scale) / height),
+    );
+    if (id === socialId && clock < socialUntil && !motion.matches) {
+      const approach = Math.sin(Math.max(0, (socialUntil - clock) / 3) * Math.PI) * 0.28;
+      x += (position.x - x) * approach;
+      y += (position.y - y) * approach;
+    }
+    return { x, y };
+  }
+  function companions() {
+    return (pet.companions ?? []).slice(0, 3);
+  }
+  function companionAt(x: number, y: number): SceneCompanion | undefined {
+    const available = companions();
+    for (let index = available.length - 1; index >= 0; index--) {
+      const point = companionLocation(index, available[index].id);
+      const scale = companionScale();
+      const dx = ((x - point.x) * width) / (120 * scale);
+      const dy = ((y - point.y) * height + 24 * scale) / (166 * scale);
+      if (dx * dx + dy * dy < 1) return available[index];
+    }
+  }
+  function egg() {
+    const coast = pet.biome === 'coast';
+    const tundra = pet.biome === 'tundra';
+    const shell = coast ? '#e5eee3' : tundra ? '#eee6ef' : '#f3efcf';
+    const shade = coast ? '#a8cfcc' : tundra ? '#c8b9d5' : '#c7d49f';
+    const ink = coast ? '#82b5b6' : tundra ? '#a895bd' : '#a2b77c';
+    const warm = reaction !== null && clock < reactionUntil;
+    const wiggle = motion.matches
+      ? 0
+      : warm
+        ? Math.sin(clock * 8) * 0.055
+        : Math.sin(clock * 1.8) * 0.012;
+    ellipse(522, 471, 100, 16, '#40583a17');
+    ellipse(522, 466, 94, 20, '#cabd91');
+    ellipse(522, 461, 83, 15, '#e5dcb8');
+    ctx.save();
+    ctx.translate(522, 354);
+    ctx.rotate(wiggle);
+    const gradient = ctx.createLinearGradient(-75, -130, 75, 110);
+    gradient.addColorStop(0, '#fffdf1');
+    gradient.addColorStop(0.48, shell);
+    gradient.addColorStop(1, shade);
+    path(gradient, () => {
+      ctx.moveTo(0, -141);
+      ctx.bezierCurveTo(-48, -139, -95, -46, -88, 26);
+      ctx.bezierCurveTo(-82, 130, 84, 130, 88, 26);
+      ctx.bezierCurveTo(95, -46, 48, -139, 0, -141);
+      ctx.closePath();
+    });
+    ctx.save();
+    ctx.clip();
+    const random = seeded(pet.seed);
+    for (let index = 0; index < 12; index++) {
+      const x = (random() - 0.5) * 150;
+      const y = -108 + random() * 198;
+      ellipse(
+        x,
+        y,
+        7 + random() * 8,
+        4 + random() * 5,
+        index % 3 === 0 ? '#ffffff80' : ink,
+        random() * 2,
+      );
+    }
+    ctx.restore();
+    ctx.beginPath();
+    ctx.ellipse(-33, -60, 16, 35, -0.3, 0, TAU);
+    stroke('#ffffff85', 7);
+    if (warm) {
+      heart(0, -186, 12, '#cf9984');
+    }
+    ctx.restore();
+  }
+  function drawCompanions() {
+    companions().forEach((friend, index) => {
+      const point = companionLocation(index, friend.id);
+      const scale = companionScale();
+      const model: ScenePet = {
+        id: friend.id,
+        seed: friend.seed,
+        biome: friend.biome,
+        stage: 'adult',
+        mood: 'A gusto',
+        sleeping: false,
+      };
+      ctx.save();
+      ctx.translate(point.x * width, point.y * height);
+      ctx.scale(scale, scale);
+      ctx.translate(-522, -344);
+      creature(model, true);
+      ctx.restore();
+      const label = friend.name.length > 12 ? `${friend.name.slice(0, 11)}…` : friend.name;
+      ctx.save();
+      ctx.font = `600 ${width < 600 ? 10 : 11}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      const textWidth = Math.min(100, ctx.measureText(label).width + 18);
+      const labelY = point.y * height - 190 * scale;
+      ctx.beginPath();
+      ctx.roundRect(point.x * width - textWidth / 2, labelY - 10, textWidth, 21, 8);
+      ctx.fillStyle = '#fffdf0df';
+      ctx.fill();
+      ctx.fillStyle = '#748663';
+      ctx.fillText(label, point.x * width, labelY + 4);
+      ctx.restore();
+      if (friend.id === socialId && clock < socialUntil) {
+        const heartX = ((point.x + position.x) * width) / 2;
+        const heartY = ((point.y + position.y) * height) / 2 - 95 * scale;
+        heart(heartX, heartY, 9, '#d39d95');
+      }
+    });
   }
   function clampDestination(x: number, y: number): { x: number; y: number } {
     const scale = petScale();
@@ -644,7 +824,7 @@ export function createScene(
     };
   }
   function moveTo(x: number, y: number, fromInput = false) {
-    if (disposed) return;
+    if (disposed || pet.stage === 'egg') return;
     destination = clampDestination(x, y);
     if (fromInput) {
       lastInteraction = clock;
@@ -659,27 +839,23 @@ export function createScene(
     const unit = Math.min(width / 1000, height / 650);
     // Add framing trees in portrait, where the wide world otherwise crops them away.
     if (width / height < 1.05) {
-      pine(
-        width * 0.045,
-        height * 0.57,
-        unit * 1.45,
-        pet.biome === 'tundra' ? '#9cb8b7' : '#8ca77b',
-        pet.biome === 'tundra',
-      );
-      pine(
-        width * 0.96,
-        height * 0.61,
-        unit * 1.7,
-        pet.biome === 'tundra' ? '#8fa9ad' : '#819e77',
-        pet.biome === 'tundra',
-      );
+      if (worldBiome() === 'coast') {
+        palm(width * 0.02, height * 0.62, unit * 1.6);
+        palm(width * 0.96, height * 0.6, unit * 1.65);
+        ellipse(width * 0.07, height * 0.65, 18, 7, '#b9b798');
+        ellipse(width * 0.93, height * 0.69, 22, 8, '#b5ba9f');
+      } else {
+        const snow = worldBiome() === 'tundra';
+        pine(width * 0.045, height * 0.57, unit * 1.45, snow ? '#9cb8b7' : '#8ca77b', snow);
+        pine(width * 0.96, height * 0.61, unit * 1.7, snow ? '#8fa9ad' : '#819e77', snow);
+      }
     }
     ctx.save();
     ctx.translate(width * 0.2, height * 0.73);
     ctx.scale(unit, unit);
-    ellipse(0, 0, 105, 29, pet.biome === 'tundra' ? '#c3d8dc' : '#b8c5a0');
-    ellipse(0, -4, 95, 25, pet.biome === 'tundra' ? '#bad8df' : '#98c2b3');
-    ellipse(-8, -8, 74, 16, pet.biome === 'tundra' ? '#d6e8e8' : '#afd3c0');
+    ellipse(0, 0, 105, 29, worldBiome() === 'tundra' ? '#c3d8dc' : '#b8c5a0');
+    ellipse(0, -4, 95, 25, worldBiome() === 'tundra' ? '#bad8df' : '#98c2b3');
+    ellipse(-8, -8, 74, 16, worldBiome() === 'tundra' ? '#d6e8e8' : '#afd3c0');
     ctx.beginPath();
     ctx.ellipse(4, -5, 53 + Math.sin(clock * 1.8) * 3, 11, 0, 0, TAU);
     stroke('#e9f2d880', 1.5);
@@ -695,7 +871,7 @@ export function createScene(
     ctx.rotate(-0.1);
     ellipse(0, 6, 76, 29, '#3e573411');
     ellipse(0, 0, 73, 28, '#c8b88b');
-    ellipse(0, -4, 66, 23, pet.biome === 'tundra' ? '#d9c4c6' : '#e4d8b5');
+    ellipse(0, -4, 66, 23, worldBiome() === 'tundra' ? '#d9c4c6' : '#e4d8b5');
     ctx.beginPath();
     ctx.ellipse(0, -4, 55, 17, 0, 0, TAU);
     stroke('#b9a780', 1.3);
@@ -726,7 +902,7 @@ export function createScene(
         y,
         1.5 * mote.size,
         1.5 * mote.size,
-        pet.biome === 'tundra' ? '#ffffffa6' : '#f6ecc599',
+        worldBiome() === 'tundra' ? '#ffffffa6' : '#f6ecc599',
       );
     }
   }
@@ -741,6 +917,7 @@ export function createScene(
     background();
     ctx.restore();
     habitatObjects();
+    drawCompanions();
     if (clock < groundMarker.until && !motion.matches) {
       const alpha = Math.max(0, (groundMarker.until - clock) / 1.3);
       ctx.save();
@@ -762,7 +939,8 @@ export function createScene(
     ctx.translate(position.x * width, position.y * height);
     ctx.scale(petScale(), petScale());
     ctx.translate(-522, -344);
-    creature();
+    if (pet.stage === 'egg') egg();
+    else creature();
     for (const p of particles) {
       ctx.save();
       ctx.globalAlpha = Math.min(1, (p.life - p.age) * 1.7);
@@ -787,6 +965,7 @@ export function createScene(
     if (!motion.matches) clock += dt;
     pointer += (targetPointer - pointer) * Math.min(1, dt * 5);
     if (
+      pet.stage !== 'egg' &&
       !pet.sleeping &&
       !reaction &&
       !motion.matches &&
@@ -800,7 +979,7 @@ export function createScene(
     const dx = (destination.x - position.x) * width;
     const dy = (destination.y - position.y) * height;
     const distance = Math.hypot(dx, dy);
-    walking = !pet.sleeping && !motion.matches && distance > 1;
+    walking = pet.stage !== 'egg' && !pet.sleeping && !motion.matches && distance > 1;
     if (walking) {
       const step = Math.min(1, ((width < 600 ? 92 : 125) * dt) / distance);
       position.x += (destination.x - position.x) * step;
@@ -808,6 +987,7 @@ export function createScene(
       walkPhase += dt * 10;
     }
     if (reaction && clock >= reactionUntil) reaction = null;
+    if (socialId && clock >= socialUntil) socialId = null;
     for (const p of particles) {
       p.age += dt;
       p.x += p.vx * dt;
@@ -864,7 +1044,9 @@ export function createScene(
       ? tool === 'hand'
         ? 'grab'
         : 'pointer'
-      : 'default';
+      : companionAt(point.x, point.y)
+        ? 'pointer'
+        : 'default';
     if (motion.matches) {
       pointer = targetPointer;
       render();
@@ -890,7 +1072,12 @@ export function createScene(
       destination = { ...position };
       walking = false;
       options.onPetInteract?.(tool);
-    } else if (point.y > 0.32) moveTo(point.x, point.y - (80 * petScale()) / height, true);
+    } else {
+      const friend = companionAt(point.x, point.y);
+      if (friend) options.onCompanionInteract?.(friend.id);
+      else if (point.y > 0.32 && pet.stage !== 'egg')
+        moveTo(point.x, point.y - (80 * petScale()) / height, true);
+    }
   }
   function pointerLeave() {
     targetPointer = 0;
@@ -918,9 +1105,16 @@ export function createScene(
   return {
     update(next) {
       if (disposed) return;
-      const changedBiome = pet.biome !== next.biome;
+      const changedBiome = (pet.worldBiome ?? pet.biome) !== (next.worldBiome ?? next.biome);
+      const changedPet = pet.id !== next.id || pet.seed !== next.seed;
+      const hatched = pet.stage === 'egg' && next.stage === 'young';
       pet = { ...next };
-      if (changedBiome) {
+      if (changedPet) {
+        reaction = null;
+        socialId = null;
+        socialUntil = 0;
+      }
+      if (changedBiome || changedPet) {
         position = clampDestination(0.5, 0.57);
         destination = { ...position };
         particles = [];
@@ -928,10 +1122,16 @@ export function createScene(
         lastInteraction = clock;
         nextWander = clock + 11;
       }
-      if (renderedSeed !== pet.seed) {
-        renderedSeed = pet.seed;
-        appearance = seeded(pet.seed)();
+      canvas.dataset.stage = pet.stage ?? 'adult';
+      canvas.dataset.originBiome = pet.biome;
+      canvas.dataset.worldBiome = worldBiome();
+      canvas.dataset.companions = String(companions().length);
+      canvas.dataset.companionCount = String(companions().length);
+      if (hatched) {
+        reaction = 'win';
+        reactionUntil = clock + (motion.matches ? 0 : 2.4);
       }
+
       render();
       requestFrame();
     },
@@ -974,6 +1174,20 @@ export function createScene(
     },
     getPetPosition() {
       return { ...position };
+    },
+    reactTogether(id) {
+      if (disposed || pet.stage === 'egg' || !companions().some((friend) => friend.id === id))
+        return;
+      socialId = id;
+      socialUntil = clock + (motion.matches ? 0 : 3);
+      reaction = 'pet';
+      reactionUntil = clock + (motion.matches ? 0 : 2.4);
+      destination = { ...position };
+      walking = false;
+      lastInteraction = clock;
+      nextWander = clock + 12;
+      render();
+      requestFrame();
     },
     destroy() {
       disposed = true;

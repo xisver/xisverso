@@ -1,70 +1,69 @@
 # Arquitectura de Xisverso
 
-## Refugio como espacio de juego
+## Mundo, simulación e interfaz
 
-La aplicación utiliza TypeScript y Vite. La escena Canvas 2D ocupa el área disponible del navegador; las herramientas, el nombre de la mascota y los accesos al mundo se superponen como controles del juego. Las necesidades, el progreso y los recuerdos se consultan en diálogos cuando el jugador los necesita.
+El refugio Canvas 2D es la pantalla principal. La interfaz HTML añade herramientas, botones accesibles que siguen a la mascota y diálogos para crecimiento, viajes, cocina, colección y expediciones.
 
-```text
-Entrada de ratón, táctil o teclado
-  ├── Suelo → destino de movimiento → escena y animación
-  ├── Herramienta → selección visual, sin gasto de recursos
-  ├── Mascota → cuidado del dominio → guardado y reacción
-  └── Acceso del mundo → viaje, minijuego o diálogo
-```
+- `src/domain/game.ts`: reglas puras de cuidado, ciclo de vida, inventario, exploración, cocina, convivencia local y migración.
+- `src/domain/game.test.ts`: invariantes, límites, inmutabilidad y casos de persistencia.
+- `src/render/scene.ts`: dibujo procedural, etapas visuales, paseo y residentes del bioma.
+- `src/main.ts`: entrada de ratón/táctil/teclado, diálogos, guardado y coordinación de actividades.
+- `src/style.css`: presentación del mundo, herramientas, luciérnagas y diálogos adaptables.
+- `tests/game.spec.ts`: recorridos con Chrome aislado y sin ventana.
+- `scripts/check-pages.mjs`: comprobación de los recursos y el guardado del juego compilado bajo `/xisverso/`.
 
-- `src/domain/game.ts`: tipos y reglas de simulación, independientes del DOM y del almacenamiento.
-- `src/domain/game.test.ts`: invariantes, inmutabilidad, límites y persistencia.
-- `src/render/scene.ts`: arte procedural, coordenadas, movimiento, detección de interacción y ciclo de animación.
-- `src/main.ts`: herramientas, controles accesibles, diálogos, simulación, guardado y minijuego.
-- `src/style.css`: mundo adaptable al tamaño de pantalla, herramientas y presentación de diálogos.
-- `tests/game.spec.ts`: recorridos de juego con una instancia de Chrome aislada y sin ventana.
+La escena comunica interacciones; no decide recursos ni cambia necesidades. Cada operación del dominio produce un estado nuevo y el coordinador lo guarda antes de actualizar la presentación.
 
-La lógica de dominio produce estados nuevos. La escena no decide cuántas semillas recibe el jugador ni modifica necesidades: comunica una interacción al coordinador. Seleccionar o arrastrar una herramienta no ejecuta por sí mismo un cuidado. El cuidado se liquida al usarla sobre la mascota; tocar el suelo solo cambia su destino.
+## Identidad, etapa y lugar
 
-## Movimiento e interacción
+La mascota activa conserva ID, nombre, semilla, bioma de origen, necesidades, vínculo, edad efectiva de crecimiento e historial de recetas. La etapa se deriva del crecimiento: huevo, joven o adulto. La incubación dura 60 segundos y la etapa joven otros 600 segundos efectivos. Dar calor al huevo añade 10 segundos de progreso; los cuidados y las recetas añaden crecimiento después de nacer. La representación cambia con la etapa, no por visitar otro lugar.
 
-La escena expone posiciones normalizadas respecto al lienzo para mantener alineados el dibujo, los gestos y el control HTML de la mascota. El movimiento interpola el destino dentro de una zona segura, añade pasos y conserva el cuerpo visible por encima de las herramientas. El paseo espontáneo y la mirada son comportamientos visuales locales.
+`pet.biome` es el **origen fijo** que determina rasgos procedurales. `currentBiome` es el escenario visitado. Las mascotas libres guardan además `habitatBiome`, el lugar donde viven desde que se liberaron. Separar estos valores evita transformar una mascota cuando el jugador viaja.
 
-Un botón HTML acompaña la posición de la mascota y permite activar la misma interacción con teclado. Los controles de herramientas tienen nombre accesible, estado de selección y atajos. Los diálogos tienen títulos, cierre por botón y soporte de Escape. En móvil se puede seleccionar y tocar; arrastrar es una alternativa, no un requisito.
+Al liberar un adulto se conserva en `freePets` con la misma identidad y se crea un huevo con nueva identidad en el bioma actual. El dominio rechaza liberar un huevo o joven, duplicar un adulto y liberar mientras una expedición requiere liquidación.
 
-La posición caminada y la herramienta seleccionada pertenecen a la escena de esta sesión. No son nuevos campos del guardado ni aportan recursos. Dormir, cuidar o jugar sí invocan las reglas de la simulación existentes.
+La colección contiene mascotas del mismo jugador. Los residentes presentes pueden aparecer en la escena e interactuar con el compañero nacido. Esto no representa usuarios remotos ni una conexión multijugador.
 
-## Estado y tiempo
+## Necesidades y alimentación
 
-La clave de almacenamiento sigue siendo `xisverso.save.v1`. El rediseño mantiene el esquema de la primera versión: identidad, nombre, semilla y bioma; necesidades; vínculo; semillas; experiencia; nivel; actividades; récord del minijuego y última actualización. Una partida válida de la versión anterior conserva su progreso.
+Todas las necesidades están entre 0 y 100. Hambre aumenta con el tiempo y comer la reduce; energía, higiene y ánimo empeoran al bajar. La lógica de estado de ánimo, los colores y las descripciones deben respetar esta diferencia.
 
-Se valida el JSON y sus valores al cargar. Un guardado inválido se rechaza de forma controlada. Antes de cambiar el esquema habrá que añadir migraciones y pruebas con partidas antiguas.
+La mochila contiene materiales y porciones de recetas conocidas. Cocinar comprueba todos los ingredientes y los consume de manera atómica; una receta incompleta no quita materiales. Alimentar consume una porción seleccionada y registra la receta en `pet.diet`. La selección de herramienta no gasta recursos.
 
-El tiempo transcurrido se calcula al volver y al ejecutar acciones. La ausencia aplicada tiene un límite, se descartan intervalos negativos y se acotan las necesidades. No hace falta mantener una pestaña abierta para calcular el deterioro. Un reloj local manipulado puede afectar la partida: es una limitación aceptada del prototipo, no una base para economía en línea.
+El historial de dieta se conserva para un futuro diseño de evoluciones alimentarias. En esta versión no determina una rama de evolución ni modifica la apariencia.
 
-`localStorage` puede estar bloqueado, llenarse o borrarse. Un fallo de escritura deja jugable la sesión e informa de la falta de guardado. Se escucha `storage` y se reconcilia el estado antes de las operaciones para sincronizar pestañas; esto no equivale a transacciones ni a sincronización entre dispositivos. Para una economía remota se requiere un servidor.
+## Exploraciones persistentes
 
-## Arte procedural
+Una expedición guarda ID, bioma de salida, hora inicial/final, hasta tres acompañantes y sus materiales previstos. Los acompañantes deben ser adultos libres reales, sin duplicados. La cantidad de materiales aumenta con el grupo.
 
-La semilla controla diferencias reproducibles de proporciones, color y adornos. La animación añade respiración, parpadeo, pasos y reacciones sin cambiar la identidad. Los biomas tienen fondos y paletas diferenciados.
+El bioma y la recompensa se fijan al iniciar. Viajar o recargar mientras transcurre la actividad no cambia esos datos ni reinicia el reloj. La recompensa solo se reclama después de terminar y se liquida una vez; comenzar una segunda salida sin cerrar la primera se rechaza.
 
-La resolución se adapta al contenedor y a la densidad de píxeles. La escena respeta el movimiento reducido y pausa trabajo innecesario cuando la página está oculta. Mascotas, paisajes y efectos se construyen con formas y curvas, sin sprites ni modelos 3D externos.
+Se permite explorar mientras el compañero está en el huevo: el jugador puede reunir materiales antes de que nazca. Las expediciones son actividades locales, no resultados verificados por un servidor.
 
-## Minijuego
+## Guardados y migración
 
-La actividad de luciérnagas dura 20 segundos. El coordinador mantiene el inicio, el resultado y un cierre único; solo al terminar aplica el resultado mediante el dominio. Salir antes de tiempo no entrega semillas. El récord conserva la puntuación real y los premios y la experiencia tienen límites.
+La clave actual es `xisverso.save.v2`, con esquema `version: 2`. La aplicación busca un v2 válido. Si falta o está dañado, intenta recuperar un respaldo v1 válido y lo migra; el respaldo v1 se conserva sin modificar. Migrar convierte el antiguo valor de saciedad en hambre (`100 - valor anterior`), conserva la mascota previa como adulta y mantiene el progreso anterior.
 
-Las recompensas de esta versión son locales y modificables desde el equipo. El cierre único de la interfaz evita duplicados normales de sesión, pero no constituye validación contra trampas.
+La validación comprueba estructuras, valores finitos, límites, IDs únicos, recetas, inventario y expediciones. Un estado inválido se rechaza sin aceptar propiedades arbitrarias.
+
+El tiempo se reconcilia al volver y al ejecutar acciones. No se aplican intervalos negativos y se limita la ausencia que modifica el cuidado; no hay muerte permanente. Los ritmos del prototipo son configurables y no constituyen fechas de juego definitivas.
+
+`localStorage` puede estar bloqueado, llenarse o borrarse. Un fallo mantiene jugable la sesión e informa de que no se guardará. La sincronización entre pestañas escucha `storage` y reconcilia antes de operar; no equivale a transacciones ni a sincronización entre dispositivos. Otro origen web dispone de otro guardado.
+
+## Dibujo, gestos y accesibilidad
+
+Las etapas, los residentes, los paisajes y los efectos se dibujan mediante formas y curvas. El origen controla las paletas de las mascotas; el lugar actual controla el entorno. La costa utiliza vegetación costera y la tundra conserva sus propios elementos.
+
+Las posiciones se expresan normalizadas respecto al lienzo, con márgenes para HUD y herramientas. El huevo no camina; jóvenes y adultos pueden seguir un destino. La escena respeta el movimiento reducido y pausa trabajo cuando la página está oculta.
+
+El botón HTML de la mascota permite activar con teclado el mismo cuidado que un toque. La selección de herramientas tiene nombre accesible y estado; los diálogos tienen título, cierre y Escape. En móvil siempre existe la alternativa de seleccionar y tocar sin arrastrar.
+
+## Luciérnagas
+
+El minijuego conserva su sesión de 20 segundos. Los botones y su brillo deben verse sobre el campo nocturno y mantener una superficie táctil suficiente. Al finalizar se entrega una sola recompensa; salir antes no entrega premios. La visibilidad gráfica se comprueba además de los cambios de contador.
 
 ## Evolución al modo social
 
-Se prevén `Player`, `Pet`, `SpeciesDefinition`, `BiomeDefinition`, `Habitat`, `Inventory`, `ActivityDefinition`, `Room` y `GameSession`. Esta versión no crea estos servicios ni una base de datos remota.
+Las cuentas, visitas entre usuarios, salas privadas y minijuegos multijugador siguen pendientes. Un servidor deberá autenticar propiedad, inventario y resultados; cada premio tendrá un identificador idempotente. El estado local no se importará como prueba fiable de recursos.
 
-Antes de convivir entre usuarios:
-
-1. El servidor autentica y autoriza operaciones sobre mascotas y refugios.
-2. El servidor calcula o verifica recursos, resultados y recompensas.
-3. Cada acción con premio tiene un identificador persistente para evitar duplicados.
-4. Los mensajes de movimiento y expresión son decorativos; no entregan semillas.
-5. Las salas tienen límites de participantes, permisos, reconexión, bloqueo y reporte.
-
-Las visitas asincrónicas precederán a los encuentros en tiempo real. Las primeras salas serán privadas y pequeñas.
-
-## Verificación
-
-Las pruebas de dominio cubren invariantes, reloj atrasado, guardado corrupto, recompensas y biomas. Las pruebas de interfaz recorren selección y uso de herramientas, desplazamiento, arrastre, teclado, preservación de una partida v1, viaje, minijuego, guardado y tamaños móviles. La compilación comprueba TypeScript y produce la aplicación estática. Las capturas permiten revisar la composición, pero no sustituyen las pruebas de comportamiento.
+Primero se validarán cuentas y visitas asincrónicas; después encuentros en tiempo real para grupos pequeños, con permisos, reconexión, bloqueo y reporte.
