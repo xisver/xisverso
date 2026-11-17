@@ -28,7 +28,7 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Abre manualmente la dirección local que muestra Vite en la terminal. El comando no toma el control del navegador.
+Abre manualmente http://127.0.0.1:4173/ o la dirección local que muestra Vite en la terminal. El comando no toma el control del navegador.
 
 ```powershell
 npm.cmd test
@@ -60,7 +60,7 @@ Tecnologías: TypeScript, Vite, Canvas 2D y APIs del navegador. La simulación e
 npm.cmd run test:e2e
 ```
 
-Las pruebas usan una instancia aislada de Google Chrome sin ventana, lanzada desde PowerShell. No usan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado; la compilación y las pruebas de simulación no necesitan navegador.
+Detén antes el servidor de desarrollo con Ctrl+C: las pruebas utilizan el mismo puerto local 4173. Las pruebas usan una instancia aislada de Google Chrome sin ventana, lanzada desde PowerShell. No usan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado; la compilación y las pruebas de simulación no necesitan navegador.
 
 Cubren cuidados, cambio de nombre, persistencia al recargar, los biomas, navegación móvil, teclado, finalización y abandono del minijuego, guardados dañados, almacenamiento bloqueado y sincronización entre pestañas. Las capturas se generan en `artifacts/`, que no se versiona.
 

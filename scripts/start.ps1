@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateRange(1024,65535)][int]$Port = 5173)
+param([ValidateRange(1024,65535)][int]$Port = 4173)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw 'Instala Node.js 24 para ejecutar Xisverso.' }
