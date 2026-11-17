@@ -1,0 +1,21 @@
+{
+  "name": "xisverso",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Un mundo vivo de mascotas procedurales por XisSoft",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --experimental-strip-types --test src/domain/game.test.ts",
+    "test:e2e": "playwright test",
+    "format": "prettier --write src tests docs *.json *.ts *.html README.md AGENTS.md .github"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "prettier": "3.10.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.8"
+  }
+}

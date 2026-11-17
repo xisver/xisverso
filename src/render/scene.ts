@@ -1,0 +1,738 @@
+/** Xisverso: every shape is drawn at runtime, without image or model assets. */
+export interface ScenePet {
+  seed: number;
+  biome: 'forest' | 'coast' | 'tundra';
+  mood: string;
+  sleeping: boolean;
+}
+
+type Reaction = 'feed' | 'clean' | 'rest' | 'pet' | 'win';
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  kind: 'heart' | 'spark' | 'bubble';
+  color: string;
+};
+
+const WORLD_W = 1000;
+const WORLD_H = 560;
+const TAU = Math.PI * 2;
+
+function seeded(seed: number): () => number {
+  let n = seed | 0 || 1;
+  return () => {
+    n = (Math.imul(n, 1664525) + 1013904223) | 0;
+    return (n >>> 0) / 4294967296;
+  };
+}
+
+export function createScene(
+  canvas: HTMLCanvasElement,
+  initial: ScenePet,
+): {
+  update(pet: ScenePet): void;
+  react(action: Reaction): void;
+  destroy(): void;
+} {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Tu navegador necesita Canvas 2D para mostrar la mascota.');
+  const ctx = context;
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let pet = { ...initial };
+  let disposed = false;
+  let frame = 0;
+  let previous = 0;
+  let clock = 0;
+  let reaction: Reaction | null = null;
+  let reactionUntil = 0;
+  let particles: Particle[] = [];
+  let width = 1;
+  let height = 1;
+  let pointer = 0;
+  let targetPointer = 0;
+  let renderedSeed = pet.seed;
+  let appearance = seeded(pet.seed)();
+  const landmarks = Array.from({ length: 30 }, (_, i) => {
+    const random = seeded(i * 163 + 42);
+    return {
+      x: random() * WORLD_W,
+      y: random(),
+      size: 0.6 + random() * 1.1,
+      phase: random() * TAU,
+    };
+  });
+
+  function ellipse(x: number, y: number, rx: number, ry: number, color: string, rotation = 0) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, rotation, 0, TAU);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  function stroke(color: string, thickness = 2) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thickness;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  }
+  function path(fill: string, draw: () => void) {
+    ctx.beginPath();
+    draw();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  function hill(color: string, y: number, left: number, right: number) {
+    path(color, () => {
+      ctx.moveTo(-100, y);
+      ctx.bezierCurveTo(180, left, 660, right, 1100, y - 15);
+      ctx.lineTo(1100, 700);
+      ctx.lineTo(-100, 700);
+      ctx.closePath();
+    });
+  }
+  function pine(x: number, y: number, size: number, color: string, snow = false) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size, size);
+    ctx.fillStyle = snow ? '#8c9391' : '#8c8663';
+    ctx.fillRect(-3, -82, 6, 89);
+    for (let n = 0; n < 3; n++) {
+      const top = -178 + n * 43;
+      const spread = 31 + n * 15;
+      path(color, () => {
+        ctx.moveTo(0, top);
+        ctx.quadraticCurveTo(-spread * 0.36, top + 26, -spread, top + 72);
+        ctx.quadraticCurveTo(0, top + 91, spread, top + 72);
+        ctx.quadraticCurveTo(spread * 0.36, top + 26, 0, top);
+      });
+      if (snow)
+        path('#edf4ec', () => {
+          ctx.moveTo(0, top);
+          ctx.lineTo(-spread * 0.61, top + 44);
+          ctx.quadraticCurveTo(0, top + 59, spread * 0.61, top + 44);
+          ctx.closePath();
+        });
+    }
+    ctx.restore();
+  }
+  function leaf(x: number, y: number, size: number, rotation: number, color: string) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    path(color, () => {
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-size, -size * 0.5, -size * 0.65, -size * 1.4, 0, -size * 1.6);
+      ctx.bezierCurveTo(size * 0.7, -size, size * 0.55, -size * 0.35, 0, 0);
+    });
+    ctx.restore();
+  }
+  function grass(x: number, y: number, size: number, color: string) {
+    ctx.beginPath();
+    ctx.moveTo(x - size * 0.55, y);
+    ctx.quadraticCurveTo(x - size * 0.8, y - size, x - size * 0.4, y - size * 1.4);
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + size * 0.1, y - size, x - size * 0.12, y - size * 1.8);
+    ctx.moveTo(x + size * 0.38, y);
+    ctx.quadraticCurveTo(x + size * 0.7, y - size * 0.7, x + size, y - size);
+    stroke(color, 2.8);
+  }
+  function mushroom(x: number, y: number, size: number) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size, size);
+    path('#f1e9ce', () => {
+      ctx.moveTo(-5, 0);
+      ctx.lineTo(-4, -20);
+      ctx.lineTo(5, -20);
+      ctx.lineTo(7, 0);
+      ctx.closePath();
+    });
+    path('#c77650', () => {
+      ctx.moveTo(-19, -15);
+      ctx.bezierCurveTo(-19, -40, 20, -42, 21, -15);
+      ctx.quadraticCurveTo(0, -8, -19, -15);
+    });
+    ellipse(-7, -24, 3, 2.4, '#f5e4b8');
+    ellipse(7, -28, 3.5, 2.5, '#f5e4b8');
+    ellipse(11, -18, 2.2, 1.9, '#f5e4b8');
+    ctx.restore();
+  }
+  function blossom(x: number, y: number, color: string) {
+    for (let i = 0; i < 5; i++)
+      ellipse(x + Math.cos((i * TAU) / 5) * 4, y + Math.sin((i * TAU) / 5) * 4, 3.4, 3.4, color);
+    ellipse(x, y, 2.5, 2.5, '#e9b458');
+  }
+  function cloud(x: number, y: number, scale: number) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = 0.58;
+    ellipse(0, 0, 39, 12, '#fffdf1');
+    ellipse(-20, -6, 21, 17, '#fffdf1');
+    ellipse(9, -13, 23, 21, '#fffdf1');
+    ellipse(29, -3, 21, 13, '#fffdf1');
+    ctx.restore();
+  }
+
+  function background() {
+    const coast = pet.biome === 'coast';
+    const tundra = pet.biome === 'tundra';
+    const sky = ctx.createLinearGradient(0, 0, 0, WORLD_H);
+    sky.addColorStop(0, tundra ? '#dce8ef' : coast ? '#dceee6' : '#e9edda');
+    sky.addColorStop(1, tundra ? '#f3efe8' : coast ? '#f5edce' : '#f3eed8');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    ellipse(790, 108, 65, 65, tundra ? '#f6f4e6' : '#f5e3a5');
+    ellipse(790, 108, 49, 49, tundra ? '#fefbf0' : '#ffe9b1');
+    cloud(310, 95, 0.7);
+    cloud(670, 170, 0.55);
+    cloud(940, 66, 0.8);
+    if (coast) {
+      hill('#c7dcd2', 305, 220, 195);
+      ctx.fillStyle = '#9dcac5';
+      ctx.fillRect(0, 300, WORLD_W, 180);
+      for (let i = 0; i < 7; i++) {
+        const y = 321 + i * 20;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        for (let x = 0; x <= 1040; x += 40)
+          ctx.lineTo(x, y + Math.sin(x * 0.02 + clock * 0.6 + i) * 3);
+        stroke(i % 2 ? '#b9dcd2' : '#d6e6d5', 2);
+      }
+      hill('#e6d6a3', 428, 344, 438);
+      hill('#f0dfb1', 491, 386, 463);
+      for (const item of landmarks.slice(0, 10)) {
+        const x = item.x,
+          y = 450 + item.y * 100;
+        ellipse(x, y, 9 * item.size, 4 * item.size, '#cabc91');
+      }
+      // Curved palms frame the cove.
+      for (const [x, y, scale] of [
+        [105, 430, 1.08],
+        [925, 405, 0.83],
+      ]) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(24, -100, -6, -205);
+        stroke('#b0a079', 15);
+        for (let i = 0; i < 7; i++) {
+          const angle = -Math.PI + i * 0.48;
+          ctx.save();
+          ctx.translate(-6, -205);
+          ctx.rotate(angle);
+          path(i % 2 ? '#6b9b7c' : '#7ca88a', () => {
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(65, -38, 106, 17);
+            ctx.quadraticCurveTo(54, -1, 0, 0);
+          });
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+      // Shells and a starfish.
+      ctx.save();
+      ctx.translate(760, 466);
+      ctx.rotate(-0.2);
+      path('#e9ad8f', () => {
+        ctx.moveTo(-18, 7);
+        ctx.bezierCurveTo(-37, -22, -20, -31, -13, -24);
+        ctx.bezierCurveTo(-10, -37, 3, -36, 8, -26);
+        ctx.bezierCurveTo(21, -34, 35, -17, 19, 7);
+        ctx.closePath();
+      });
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 7);
+        ctx.lineTo(i * 9, -20);
+        stroke('#d68f75', 1.4);
+      }
+      ctx.restore();
+      star(222, 496, 18, '#d99d6d');
+      grass(852, 483, 20, '#8ea17a');
+      grass(131, 490, 23, '#8ea17a');
+    } else if (tundra) {
+      path('#bdccd6', () => {
+        ctx.moveTo(-40, 330);
+        ctx.lineTo(130, 154);
+        ctx.lineTo(270, 312);
+        ctx.lineTo(425, 150);
+        ctx.lineTo(600, 329);
+        ctx.lineTo(810, 180);
+        ctx.lineTo(1050, 330);
+        ctx.lineTo(1050, 560);
+        ctx.lineTo(-40, 560);
+      });
+      path('#ecf0ed', () => {
+        ctx.moveTo(60, 225);
+        ctx.lineTo(130, 154);
+        ctx.lineTo(196, 238);
+        ctx.lineTo(147, 224);
+        ctx.lineTo(125, 239);
+        ctx.lineTo(97, 221);
+        ctx.closePath();
+      });
+      path('#edf1ec', () => {
+        ctx.moveTo(353, 231);
+        ctx.lineTo(425, 150);
+        ctx.lineTo(510, 239);
+        ctx.lineTo(460, 218);
+        ctx.lineTo(424, 242);
+        ctx.lineTo(393, 219);
+        ctx.closePath();
+      });
+      hill('#d3dfe1', 390, 318, 293);
+      pine(130, 418, 1.2, '#a9bfc2', true);
+      pine(847, 392, 0.9, '#a9bfc2', true);
+      pine(956, 443, 1.25, '#9ab3b7', true);
+      hill('#e9efeb', 465, 372, 374);
+      hill('#f5f5eb', 548, 434, 468);
+      for (const item of landmarks.slice(0, 20)) {
+        const y = (item.y * WORLD_H + clock * 9 * item.size) % WORLD_H;
+        ellipse(
+          item.x + Math.sin(clock + item.phase) * 8,
+          y,
+          2 * item.size,
+          2 * item.size,
+          '#ffffffb0',
+        );
+      }
+      ellipse(752, 484, 33, 8, '#dce7e5');
+      ellipse(752, 474, 28, 17, '#b7cdd2');
+      ellipse(748, 469, 25, 10, '#cbdcdd');
+      grass(228, 487, 15, '#b2c1b4');
+      grass(882, 496, 12, '#b2c1b4');
+    } else {
+      hill('#ccd8b8', 322, 189, 210);
+      hill('#bccdaa', 369, 270, 255);
+      pine(225, 385, 0.88, '#99b391');
+      pine(305, 361, 0.64, '#a6bd98');
+      pine(745, 382, 0.82, '#a3b893');
+      pine(866, 404, 1.2, '#91aa87');
+      hill('#b2c593', 441, 326, 334);
+      hill('#cad4a5', 514, 414, 424);
+      path('#ded9af', () => {
+        ctx.moveTo(443, 560);
+        ctx.bezierCurveTo(523, 496, 662, 472, 644, 433);
+        ctx.bezierCurveTo(634, 409, 578, 401, 603, 382);
+        ctx.bezierCurveTo(542, 411, 597, 424, 570, 443);
+        ctx.bezierCurveTo(534, 470, 386, 485, 291, 560);
+        ctx.closePath();
+      });
+      // A large tree with rounded leaves creates a soft frame.
+      path('#8a9271', () => {
+        ctx.moveTo(53, 472);
+        ctx.quadraticCurveTo(83, 293, 54, 164);
+        ctx.lineTo(83, 152);
+        ctx.quadraticCurveTo(110, 330, 90, 475);
+        ctx.closePath();
+      });
+      ctx.beginPath();
+      ctx.moveTo(80, 270);
+      ctx.lineTo(129, 222);
+      ctx.moveTo(74, 226);
+      ctx.lineTo(26, 190);
+      stroke('#8a9271', 12);
+      ellipse(40, 137, 112, 86, '#91ae83');
+      ellipse(115, 167, 78, 67, '#a5bc8c');
+      ellipse(4, 218, 73, 59, '#a0b58a');
+      ellipse(53, 99, 87, 60, '#adc391');
+      for (const item of landmarks.slice(0, 14)) {
+        const y = 433 + item.y * 110;
+        grass(item.x, y, 6 * item.size, '#8da676');
+        if (item.x < 380 || item.x > 680)
+          blossom(item.x + 13, y - 4, item.x % 2 > 1 ? '#f1e4bb' : '#e5c0a2');
+      }
+      mushroom(179, 470, 1.2);
+      mushroom(205, 480, 0.7);
+      mushroom(812, 454, 0.8);
+      ellipse(723, 472, 25, 8, '#acb896');
+      ellipse(723, 466, 20, 12, '#bcc2a7');
+      ellipse(751, 478, 14, 7, '#a9b492');
+      for (let i = 0; i < 3; i++) {
+        const x = 357 + i * 252 + Math.sin(clock * 0.4 + i) * 12;
+        const y = 204 + i * 29 + Math.cos(clock * 0.7 + i) * 8;
+        const flap = 0.5 + Math.abs(Math.sin(clock * 4 + i)) * 0.5;
+        ellipse(x - 4 * flap, y, 5 * flap, 7, '#e6bc68', -0.4);
+        ellipse(x + 4 * flap, y, 5 * flap, 7, '#f0cf86', 0.4);
+        ctx.beginPath();
+        ctx.moveTo(x, y - 3);
+        ctx.lineTo(x, y + 5);
+        stroke('#8b9570', 1.3);
+      }
+    }
+    // Foreground foliage anchors the illustration without covering the pet.
+    if (!tundra) {
+      const color = coast ? '#8ba785' : '#829d71';
+      for (let i = 0; i < 5; i++) {
+        leaf(25 + i * 13, 567, 48 + i * 5, -0.9 + i * 0.35, color);
+        leaf(
+          967 + i * 9,
+          575,
+          36 + i * 4,
+          -1 + i * 0.3,
+          i % 2 ? color : coast ? '#a2b58e' : '#9eb184',
+        );
+      }
+    }
+  }
+
+  function star(x: number, y: number, size: number, color: string) {
+    path(color, () => {
+      for (let i = 0; i < 10; i++) {
+        const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+        const radius = i % 2 ? size * 0.47 : size;
+        const px = x + Math.cos(angle) * radius,
+          py = y + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    });
+  }
+  function heart(x: number, y: number, size: number, color: string) {
+    path(color, () => {
+      ctx.moveTo(x, y + size * 0.7);
+      ctx.bezierCurveTo(x - size * 1.2, y, x - size * 0.8, y - size, x, y - size * 0.4);
+      ctx.bezierCurveTo(x + size * 0.8, y - size, x + size * 1.2, y, x, y + size * 0.7);
+    });
+  }
+
+  function creature() {
+    const coast = pet.biome === 'coast';
+    const tundra = pet.biome === 'tundra';
+    const active = reaction !== null && clock < reactionUntil;
+    const happy = active && reaction !== 'rest';
+    const sleepy = pet.sleeping || (active && reaction === 'rest');
+    const bounce =
+      !motion.matches && happy ? Math.abs(Math.sin((reactionUntil - clock) * 7)) * 14 : 0;
+    const breathing = motion.matches ? 0 : Math.sin(clock * (sleepy ? 1.7 : 2.1)) * 2.4;
+    const base = coast ? '#7bb7ba' : tundra ? '#b7adc9' : '#a7bb82';
+    const shade = coast ? '#64a4aa' : tundra ? '#9c91b5' : '#8fa56a';
+    const light = coast ? '#a4d0ce' : tundra ? '#cec5d9' : '#c2d09d';
+    const ink = '#35483d';
+    const offset = pointer * 3;
+    ellipse(522, 472, 99 - bounce * 0.45, 17 - bounce * 0.1, '#40583a19');
+    ellipse(522, 471, 75, 9, '#40583a13');
+    ctx.save();
+    ctx.translate(522 + offset, 344 - bounce);
+    ctx.rotate(motion.matches ? 0 : Math.sin(clock * 1.4) * 0.012);
+    ctx.scale(1 + breathing * 0.001, 1 + breathing * 0.003);
+    // Tail stays behind the silhouette.
+    ctx.save();
+    ctx.translate(91, 64);
+    ctx.rotate(-0.3 + (motion.matches ? 0 : Math.sin(clock * 2.3) * 0.1));
+    if (coast) {
+      path(shade, () => {
+        ctx.moveTo(-12, 6);
+        ctx.bezierCurveTo(12, -18, 49, -31, 48, -11);
+        ctx.quadraticCurveTo(81, -8, 46, 17);
+        ctx.quadraticCurveTo(17, 34, -12, 19);
+      });
+    } else {
+      path(shade, () => {
+        ctx.moveTo(-12, 16);
+        ctx.bezierCurveTo(42, 7, 72, -52, 43, -61);
+        ctx.bezierCurveTo(65, -14, 18, -15, -12, -2);
+      });
+      if (tundra) ellipse(48, -45, 15, 22, '#ece8e3', -0.3);
+    }
+    ctx.restore();
+    // Soft, long ears, with a distinct silhouette for each habitat.
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.scale(side, 1);
+      ctx.translate(51, -67);
+      ctx.rotate(0.17 + (motion.matches ? 0 : Math.sin(clock * 1.9 + side) * 0.025));
+      if (coast) {
+        path(base, () => {
+          ctx.moveTo(-14, 18);
+          ctx.bezierCurveTo(-21, -30, 10, -74, 34, -72);
+          ctx.bezierCurveTo(49, -55, 27, -2, 7, 22);
+        });
+        path(light, () => {
+          ctx.moveTo(-2, -5);
+          ctx.quadraticCurveTo(7, -48, 26, -56);
+          ctx.quadraticCurveTo(26, -19, 10, 0);
+        });
+      } else {
+        path(base, () => {
+          ctx.moveTo(-23, 20);
+          ctx.bezierCurveTo(-41, -30, -24, -103, 0, -111);
+          ctx.bezierCurveTo(23, -91, 28, -32, 19, 19);
+        });
+        path(tundra ? '#e8dce0' : '#d8ddad', () => {
+          ctx.moveTo(-10, -5);
+          ctx.bezierCurveTo(-20, -40, -10, -82, 0, -89);
+          ctx.bezierCurveTo(10, -62, 13, -29, 7, -6);
+        });
+      }
+      ctx.restore();
+    }
+    // Feet are separate to keep the idle movement readable.
+    ellipse(-57, 111, 31, 15, shade, -0.12);
+    ellipse(57, 111, 31, 15, shade, 0.12);
+    const bodyGradient = ctx.createLinearGradient(-60, -100, 80, 120);
+    bodyGradient.addColorStop(0, light);
+    bodyGradient.addColorStop(0.5, base);
+    bodyGradient.addColorStop(1, shade);
+    ctx.beginPath();
+    ctx.moveTo(0, -105);
+    ctx.bezierCurveTo(-72, -111, -105, -71, -102, -10);
+    ctx.bezierCurveTo(-116, 41, -109, 105, -65, 115);
+    ctx.bezierCurveTo(-20, 130, 54, 128, 83, 107);
+    ctx.bezierCurveTo(116, 84, 114, 37, 102, -10);
+    ctx.bezierCurveTo(104, -72, 72, -111, 0, -105);
+    ctx.closePath();
+    ctx.fillStyle = bodyGradient;
+    ctx.fill();
+    ellipse(0, 61, 65, 58, tundra ? '#eee8df' : '#edf0cf');
+    // Tiny side paws and their highlight.
+    ellipse(-91, 57, 17, 32, base, -0.36 - (happy ? 0.2 : 0));
+    ellipse(91, 57, 17, 32, base, 0.36 + (happy ? 0.2 : 0));
+    ctx.beginPath();
+    ctx.moveTo(-98, 58);
+    ctx.quadraticCurveTo(-98, 73, -89, 80);
+    stroke(shade, 2);
+    ctx.beginPath();
+    ctx.moveTo(98, 58);
+    ctx.quadraticCurveTo(98, 73, 89, 80);
+    stroke(shade, 2);
+    // Facial markings are deterministic per pet.
+    if (appearance > 0.42) {
+      ellipse(-69, -31, 8, 5, light, -0.4);
+      ellipse(69, -31, 8, 5, light, 0.4);
+    }
+    ellipse(-58, 17, 17, 9, coast ? '#e9b5a1' : tundra ? '#dbaeb9' : '#dfb599');
+    ellipse(58, 17, 17, 9, coast ? '#e9b5a1' : tundra ? '#dbaeb9' : '#dfb599');
+    const blink = !motion.matches && Math.sin(clock * 0.73 + appearance * 4) > 0.989;
+    const sad = /trist|cansad|hambr|suci|agotad/i.test(pet.mood);
+    for (const side of [-1, 1]) {
+      const x = side * 36 + pointer * 2;
+      if (sleepy || blink || happy) {
+        ctx.beginPath();
+        ctx.moveTo(x - 11, -3);
+        ctx.quadraticCurveTo(x, happy ? -17 : 8, x + 11, -3);
+        stroke(ink, 4);
+      } else {
+        ellipse(x, -6, 10, sad ? 11 : 14, ink);
+        ellipse(x - 2, -11, 3.6, 4.6, '#fffcef');
+        ellipse(x + 3, -1, 1.6, 1.7, '#fffcef');
+        if (sad) {
+          ctx.beginPath();
+          ctx.moveTo(x - 11, -26);
+          ctx.lineTo(x + 9, -31 + side * 4);
+          stroke(shade, 3);
+        }
+      }
+    }
+    ellipse(0, 15, 5, 3.7, ink);
+    ctx.beginPath();
+    ctx.moveTo(0, 18);
+    ctx.lineTo(0, 23);
+    ctx.moveTo(-12, 23);
+    ctx.quadraticCurveTo(-6, 31, 0, 23);
+    ctx.quadraticCurveTo(6, 31, 12, 23);
+    stroke(ink, 2.8);
+    if (happy) {
+      path('#725b4d', () => {
+        ctx.moveTo(-10, 27);
+        ctx.quadraticCurveTo(0, 34, 10, 27);
+        ctx.quadraticCurveTo(8, 45, 0, 45);
+        ctx.quadraticCurveTo(-8, 45, -10, 27);
+      });
+      ellipse(0, 39, 6, 3, '#db9f8a');
+    }
+    // A sprout, shell crest, or winter tuft gives each biome a species identity.
+    if (coast) {
+      ellipse(0, -97, 16, 9, '#e6b78e');
+      ctx.beginPath();
+      ctx.moveTo(0, -91);
+      ctx.lineTo(0, -105);
+      stroke('#cf9c76', 1.7);
+    } else if (tundra) {
+      path('#eee8e4', () => {
+        ctx.moveTo(-24, -91);
+        ctx.lineTo(-14, -116);
+        ctx.lineTo(-4, -104);
+        ctx.lineTo(8, -124);
+        ctx.lineTo(17, -106);
+        ctx.lineTo(31, -108);
+        ctx.lineTo(25, -90);
+        ctx.closePath();
+      });
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -99);
+      ctx.quadraticCurveTo(-1, -114, 7, -127);
+      stroke('#718957', 4);
+      leaf(3, -117, 17, -0.8, '#789957');
+      leaf(6, -121, 16, 0.8, '#91aa65');
+    }
+    if (sleepy) {
+      ctx.font = '600 24px system-ui, sans-serif';
+      ctx.fillStyle = '#667d76';
+      ctx.globalAlpha = 0.65;
+      ctx.fillText('z', 124, -74 - Math.sin(clock) * 4);
+      ctx.font = '600 17px system-ui, sans-serif';
+      ctx.fillText('z', 147, -103 - Math.sin(clock + 1) * 4);
+      ctx.globalAlpha = 1;
+    }
+    if (active && reaction === 'feed') {
+      ctx.save();
+      ctx.translate(-134, 69);
+      ctx.rotate(-0.25);
+      ellipse(0, 0, 15, 17, '#d3946c');
+      leaf(0, -15, 9, 0.5, '#719455');
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function render() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const scale = Math.max(width / WORLD_W, height / WORLD_H);
+    ctx.translate((width - WORLD_W * scale) / 2, height - WORLD_H * scale);
+    ctx.scale(scale, scale);
+    background();
+    creature();
+    for (const p of particles) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (p.life - p.age) * 1.7);
+      if (p.kind === 'heart') heart(p.x, p.y, 8 + p.age * 2, p.color);
+      else if (p.kind === 'spark') star(p.x, p.y, 7, p.color);
+      else {
+        ellipse(p.x, p.y, 8, 8, '#f9fffb55');
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, TAU);
+        stroke('#f9fffbcc', 1.5);
+        ellipse(p.x - 2, p.y - 3, 2, 2, '#ffffff');
+      }
+      ctx.restore();
+    }
+  }
+
+  function animate(time: number) {
+    frame = 0;
+    if (disposed || document.hidden) return;
+    const dt = Math.min(previous ? (time - previous) / 1000 : 0, 0.05);
+    previous = time;
+    if (!motion.matches) clock += dt;
+    pointer += (targetPointer - pointer) * Math.min(1, dt * 5);
+    if (reaction && clock >= reactionUntil) reaction = null;
+    for (const p of particles) {
+      p.age += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy -= dt * 7;
+    }
+    particles = particles.filter((p) => p.age < p.life);
+    render();
+    if (!motion.matches || particles.length > 0) frame = requestAnimationFrame(animate);
+  }
+  function requestFrame() {
+    if (!disposed && !document.hidden && !frame) {
+      previous = 0;
+      frame = requestAnimationFrame(animate);
+    }
+  }
+  function resize() {
+    if (disposed) return;
+    const bounds = canvas.getBoundingClientRect();
+    width = Math.max(bounds.width, 1);
+    height = Math.max(bounds.height, 1);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    render();
+    requestFrame();
+  }
+  function visibility() {
+    if (document.hidden) {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      previous = 0;
+    } else requestFrame();
+  }
+  function pointerMove(event: PointerEvent) {
+    const bounds = canvas.getBoundingClientRect();
+    targetPointer = Math.max(
+      -1,
+      Math.min(1, ((event.clientX - bounds.left) / bounds.width) * 2 - 1),
+    );
+    if (motion.matches) {
+      pointer = 0;
+      render();
+    }
+  }
+  function pointerLeave() {
+    targetPointer = 0;
+  }
+  function motionChange() {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    render();
+    requestFrame();
+  }
+  const observer = new ResizeObserver(resize);
+  observer.observe(canvas);
+  document.addEventListener('visibilitychange', visibility);
+  canvas.addEventListener('pointermove', pointerMove);
+  canvas.addEventListener('pointerleave', pointerLeave);
+  motion.addEventListener('change', motionChange);
+  resize();
+
+  return {
+    update(next) {
+      if (disposed) return;
+      pet = { ...next };
+      if (renderedSeed !== pet.seed) {
+        renderedSeed = pet.seed;
+        appearance = seeded(pet.seed)();
+      }
+      render();
+      requestFrame();
+    },
+    react(action) {
+      if (disposed) return;
+      reaction = action;
+      reactionUntil = clock + (motion.matches ? 0 : 2.4);
+      if (!motion.matches) {
+        const random = seeded(pet.seed + Math.round(clock * 1000));
+        const kind = action === 'clean' ? 'bubble' : action === 'win' ? 'spark' : 'heart';
+        const color = action === 'win' ? '#edbd68' : action === 'feed' ? '#cda069' : '#cf9984';
+        for (let i = 0; i < 9; i++)
+          particles.push({
+            x: 450 + random() * 145,
+            y: 285 + random() * 100,
+            vx: (random() - 0.5) * 40,
+            vy: -22 - random() * 35,
+            age: 0,
+            life: 1.3 + random() * 0.9,
+            kind,
+            color,
+          });
+      }
+      render();
+      requestFrame();
+    },
+    destroy() {
+      disposed = true;
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', visibility);
+      canvas.removeEventListener('pointermove', pointerMove);
+      canvas.removeEventListener('pointerleave', pointerLeave);
+      motion.removeEventListener('change', motionChange);
+      particles = [];
+    },
+  };
+}
