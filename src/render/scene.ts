@@ -749,18 +749,48 @@ export function createScene(
     });
     ctx.save();
     ctx.clip();
+    // The chosen shell pattern is carried by the saved seed, independently of its biome.
+    const pattern = pet.seed % 3;
     const random = seeded(pet.seed);
-    for (let index = 0; index < 12; index++) {
-      const x = (random() - 0.5) * 150;
-      const y = -108 + random() * 198;
-      ellipse(
-        x,
-        y,
-        7 + random() * 8,
-        4 + random() * 5,
-        index % 3 === 0 ? '#ffffff80' : ink,
-        random() * 2,
-      );
+    if (pattern === 0) {
+      for (let index = 0; index < 12; index++) {
+        const x = (random() - 0.5) * 150;
+        const y = -108 + random() * 198;
+        ellipse(
+          x,
+          y,
+          7 + random() * 8,
+          4 + random() * 5,
+          index % 3 === 0 ? '#ffffff80' : ink,
+          random() * 2,
+        );
+      }
+    } else if (pattern === 1) {
+      ctx.globalAlpha = 0.67;
+      for (const y of [-87, -39, 11, 61]) {
+        ctx.beginPath();
+        ctx.moveTo(-105, y + 10);
+        ctx.bezierCurveTo(-55, y - 15, 43, y + 26, 105, y - 8);
+        stroke(ink, 13);
+      }
+    } else {
+      const constellations = [
+        [-10, -104, 12],
+        [39, -69, 15],
+        [-43, -49, 13],
+        [5, -18, 19],
+        [54, 17, 12],
+        [-49, 31, 15],
+        [8, 63, 13],
+      ];
+      for (const [x, y, size] of constellations) {
+        ctx.globalAlpha = 0.74;
+        star(x + (random() - 0.5) * 5, y + (random() - 0.5) * 5, size, ink);
+      }
+      ctx.globalAlpha = 0.8;
+      ellipse(-19, 27, 3, 3, ink);
+      ellipse(27, 39, 3, 3, ink);
+      ellipse(-26, -83, 2.5, 2.5, ink);
     }
     ctx.restore();
     ctx.beginPath();
@@ -1123,6 +1153,7 @@ export function createScene(
         nextWander = clock + 11;
       }
       canvas.dataset.stage = pet.stage ?? 'adult';
+      canvas.dataset.eggPattern = ['speckled', 'striped', 'starry'][pet.seed % 3];
       canvas.dataset.originBiome = pet.biome;
       canvas.dataset.worldBiome = worldBiome();
       canvas.dataset.companions = String(companions().length);

@@ -13,6 +13,12 @@ La prioridad es cerrar ciclos jugables pequeños antes de ampliar el mundo. El o
 | Convivencia en vivo                | Salas privadas pequeñas, gestos y actividades entre usuarios.                     | Dos clientes ven el mismo resultado; reconectar no duplica recursos; hay bloqueo y reporte.   |
 | Minijuegos compartidos y expansión | Cooperación, competición, nuevas especies, biomas y objetos.                      | El servidor valida resultados y premios; añadir contenido no obliga a rehacer el cuidado.     |
 
+## Primer comienzo
+
+La primera entrada permite combinar un huevo Moteado, Rayado o Estelar con bosque, costa o tundra. La elección inicia la crianza al confirmar; esperar o cerrar antes no crea una partida parcial ni incuba el huevo. Una partida guardada válida, incluida una migrada o recuperada, entra directamente al refugio.
+
+Criterios de esta etapa: guardar y restaurar la elección, permitir teclado y móvil, mantener el patrón al viajar y conservar la historia iniciada desde otra pestaña.
+
 ## Iteración de crianza
 
 El siguiente ciclo une incubar, cuidar, crecer, dejar libre, explorar y cocinar para otra cría. Los adultos permanecen en el bioma donde se liberaron y pueden volver a encontrarse con su nuevo compañero. La colección y las interacciones de esta etapa pertenecen a una misma partida local.
@@ -38,3 +44,5 @@ Definir edades y audiencia, permisos de visita, normas, bloqueo y reporte. Empez
 La reproducción entre mascotas, los intercambios, la economía entre usuarios y un mundo masivo se evaluarán después de validar crianza, exploración y convivencia básica.
 
 Verificación de la iteración de crianza: 27 pruebas de dominio y 17 recorridos de interfaz. También se comprobó el juego compilado bajo `/xisverso/`, incluido el huevo, su incubación y el guardado v2.
+
+Verificación de la elección inicial: 32 pruebas de dominio y 23 recorridos de interfaz, con las nueve combinaciones de huevo/bioma, teclado, móvil, espera sin incubación, partidas existentes y dos pestañas. La compilación para Pages también comprueba la selección inicial y su persistencia.

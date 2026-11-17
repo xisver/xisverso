@@ -53,12 +53,21 @@ try {
       errors.push(`${response.status()} ${response.url()}`);
   });
   await page.goto(origin + prefix);
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  assert.equal(await page.evaluate(() => localStorage.getItem('xisverso.save.v2')), null);
+  await page.locator('input[name="starter-egg"][value="starry"]').check();
+  await page.locator('input[name="starter-biome"][value="coast"]').check();
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   await expect(page.locator('#pet-name')).toHaveText('Nubi');
   assert.equal((await page.request.get(origin + prefix + 'favicon.svg')).status(), 200);
   const saveKey = 'xisverso.save.v2';
   const before = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
   assert.equal(before.version, 2);
   assert.equal(before.pet.stage, 'egg');
+  assert.equal(before.pet.biome, 'coast');
+  assert.equal(before.currentBiome, 'coast');
+  assert.equal(before.pet.seed % 3, 2);
   await page.getByRole('button', { name: 'Caricias', exact: true }).click();
   const pet = await page.locator('#pet-interact').boundingBox();
   assert.ok(pet);
@@ -70,13 +79,14 @@ try {
     .toBeGreaterThan(before.pet.growthSeconds + 8);
   const warmed = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
   await page.reload();
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   const restored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
   assert.equal(restored.version, 2);
   assert.equal(restored.pet.id, before.pet.id);
   assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: JavaScript, CSS, favicon, huevo, calor y guardado v2 funcionan bajo /xisverso/.',
+    'PAGES_OK: JavaScript, CSS, favicon, bienvenida, huevo elegido, bioma, calor y guardado v2 funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();

@@ -33,6 +33,13 @@ async function seedState(page: Page, state: GameState) {
   );
 }
 
+async function gotoGame(page: Page) {
+  await page.goto('/');
+  await expect(page.locator('#pet-name')).toBeAttached();
+  if (await page.locator('#welcome-dialog').isVisible()) {
+    await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  }
+}
 async function readState(page: Page): Promise<GameState> {
   return page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
 }
@@ -66,7 +73,7 @@ async function openCollection(page: Page) {
 test('un huevo recibe calor, conserva el crecimiento y nace como joven', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await gotoGame(page);
   await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
   await expect(page.locator('#pet-name')).toHaveText('Nubi');
   const initial = await readState(page);
@@ -99,7 +106,7 @@ test('comer reduce Hambre y consume una porción, sin cobrar semillas al elegir 
   page,
 }) => {
   await seedState(page, bornState());
-  await page.goto('/');
+  await gotoGame(page);
   const before = await readState(page);
   await page.getByRole('button', { name: 'Comida', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Comida', exact: true })).toHaveAttribute(
@@ -129,7 +136,7 @@ test('una mascota nacida camina al tocar el suelo sin gastar la comida seleccion
   page,
 }) => {
   await seedState(page, bornState('young'));
-  await page.goto('/');
+  await gotoGame(page);
   await page.getByRole('button', { name: 'Comida', exact: true }).click();
   const initial = await petCenter(page);
   const world = await page.locator('canvas').boundingBox();
@@ -140,7 +147,7 @@ test('una mascota nacida camina al tocar el suelo sin gastar la comida seleccion
 
 test('arrastrar comida hasta la mascota aplica un solo cuidado', async ({ page }) => {
   await seedState(page, bornState());
-  await page.goto('/');
+  await gotoGame(page);
   const source = await page.getByRole('button', { name: 'Comida', exact: true }).boundingBox();
   const target = await petCenter(page);
   await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
@@ -157,7 +164,7 @@ test('viajar cambia el paisaje y conserva el origen, la identidad y la dieta', a
   const initial = bornState();
   initial.pet.diet['fruit-bowl'] = 3;
   await seedState(page, initial);
-  await page.goto('/');
+  await gotoGame(page);
   await visitBiome(page, 'coast');
   await expect(page.locator('canvas')).toHaveAttribute('data-world-biome', 'coast');
   await expect(page.locator('canvas')).toHaveAttribute('data-origin-biome', 'forest');
@@ -183,7 +190,7 @@ test('un joven crece a adulto y queda libre sin desaparecer al criar otro huevo'
   const initial = bornState('young');
   initial.pet.growthSeconds = 650;
   await seedState(page, initial);
-  await page.goto('/');
+  await gotoGame(page);
   await touchPet(page);
   await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'adult');
   await visitBiome(page, 'coast');
@@ -211,7 +218,7 @@ test('un joven crece a adulto y queda libre sin desaparecer al criar otro huevo'
 test('dos mascotas propias pueden jugar juntas en el bioma del adulto libre', async ({ page }) => {
   const initial = bornState('young', 1);
   await seedState(page, initial);
-  await page.goto('/');
+  await gotoGame(page);
   await openCollection(page);
   await page.locator('[data-socialize="xis-free-1"]').click();
   const after = await readState(page);
@@ -229,7 +236,7 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
   test.setTimeout(50000);
   const initial = bornState('adult', 4);
   await seedState(page, initial);
-  await page.goto('/');
+  await gotoGame(page);
   await page.getByRole('button', { name: 'Explorar', exact: true }).click();
   const companions = page.locator('#expedition-party input[data-companion]');
   await expect(companions).toHaveCount(4);
@@ -282,7 +289,7 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
 test('las cinco luciérnagas están dentro del campo, se ven y entregan una sola recompensa', async ({
   page,
 }) => {
-  await page.goto('/');
+  await gotoGame(page);
   await page.getByRole('button', { name: 'Jugar', exact: true }).click();
   const field = await page.locator('#game-field').boundingBox();
   expect(field!.width).toBeGreaterThan(200);
@@ -335,7 +342,7 @@ test('los cuidados y el minijuego conservan alternativas de teclado y salir no e
   page,
 }) => {
   await seedState(page, bornState());
-  await page.goto('/');
+  await gotoGame(page);
   await page.keyboard.press('2');
   const proxy = page.getByRole('button', { name: 'Interactuar con Nubi', exact: true });
   await proxy.focus();
@@ -356,7 +363,7 @@ for (const height of [844, 667]) {
   }) => {
     await seedState(page, bornState());
     await page.setViewportSize({ width: 390, height });
-    await page.goto('/');
+    await gotoGame(page);
     expect(
       await page.evaluate(
         () =>
@@ -388,8 +395,10 @@ test('un guardado dañado o el almacenamiento bloqueado no impiden incubar', asy
   await context.addInitScript((key) => localStorage.setItem(key, '{invalido'), SAVE_KEY);
   const page = await context.newPage();
   await page.goto('/');
-  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
   await expect(page.locator('#toast')).toContainText('guardado anterior estaba dañado');
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
   await context.close();
   const blocked = await browser.newContext();
   await blocked.addInitScript(() => {
@@ -401,7 +410,7 @@ test('un guardado dañado o el almacenamiento bloqueado no impiden incubar', asy
     };
   });
   const blockedPage = await blocked.newPage();
-  await blockedPage.goto('/');
+  await gotoGame(blockedPage);
   await expect(blockedPage.locator('.local-status')).toContainText('Sin guardar');
   await blockedPage.locator('#open-pet').click();
   const before = Number(await blockedPage.locator('#life-progress').getAttribute('aria-valuenow'));
@@ -419,9 +428,9 @@ test('otra pestaña recibe el alimento consumido y no revierte el progreso al re
   page,
 }) => {
   await seedState(page, bornState());
-  await page.goto('/');
+  await gotoGame(page);
   const second = await context.newPage();
-  await second.goto('/');
+  await gotoGame(second);
   await feedPet(page);
   await second.locator('#open-pet').click();
   await expect
@@ -466,7 +475,7 @@ test('migra v1 a v2 como adulta, invierte el hambre y conserva el respaldo anter
     },
     { key: LEGACY_KEY, raw },
   );
-  await page.goto('/');
+  await gotoGame(page);
   await expect(page.locator('#pet-name')).toHaveText('Luna');
   await expect(page.locator('#biome-name')).toHaveText('Costa Nácar');
   const state = await readState(page);
@@ -489,7 +498,7 @@ test('el refugio horizontal mantiene una mascota nacida y respeta movimiento red
   await seedState(page, bornState());
   await page.setViewportSize({ width: 844, height: 390 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await gotoGame(page);
   const initial = await petCenter(page);
   expect(initial.y).toBeGreaterThan(155);
   await page.keyboard.press('ArrowRight');
@@ -529,7 +538,7 @@ test('recupera el respaldo v1 válido si el guardado v2 está dañado', async ({
     },
     { key: SAVE_KEY, legacyKey: LEGACY_KEY, backup },
   );
-  await page.goto('/');
+  await gotoGame(page);
   await expect(page.locator('#pet-name')).toHaveText('Azul');
   await expect(page.locator('#toast')).toContainText('Recuperamos la copia');
   await expect(page.locator('canvas')).toHaveAttribute('data-origin-biome', 'tundra');
@@ -548,4 +557,147 @@ test('recupera el respaldo v1 válido si el guardado v2 está dañado', async ({
   await expect(page.locator('#pet-name')).toHaveText('Azul');
   expect((await readState(page)).pet.id).toBe(previousSave.pet.id);
   expect(await page.evaluate((key) => localStorage.getItem(key), LEGACY_KEY)).toBe(backup);
+});
+
+test('la primera visita permite elegir huevo Estelar y criar en la costa, y guarda la elección', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  await expect(page.locator('input[name="starter-egg"]')).toHaveCount(3);
+  await expect(page.locator('input[name="starter-biome"]')).toHaveCount(3);
+  expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBeNull();
+  await page.locator('input[name="starter-egg"][value="starry"]').check();
+  await page.locator('input[name="starter-biome"][value="coast"]').check();
+  await page.screenshot({ path: 'artifacts/xisverso-welcome-desktop.png' });
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
+  const state = await readState(page);
+  expect(state.pet.seed % 3).toBe(2);
+  expect(state.pet.stage).toBe('egg');
+  expect(state.pet.biome).toBe('coast');
+  expect(state.currentBiome).toBe('coast');
+  expect(state.pet.growthSeconds).toBeLessThan(2);
+  await expect(page.locator('canvas')).toHaveAttribute('data-world-biome', 'coast');
+  await expect(page.locator('canvas')).toHaveAttribute('data-origin-biome', 'coast');
+  await page.reload();
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
+  const restored = await readState(page);
+  expect(restored.pet.id).toBe(state.pet.id);
+  expect(restored.pet.seed).toBe(state.pet.seed);
+  expect(restored.currentBiome).toBe('coast');
+});
+
+test('elegir y esperar en la bienvenida no guarda ni incuba antes de confirmar', async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date('2026-11-17T18:00:00Z') });
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  await page.locator('input[name="starter-egg"][value="striped"]').check();
+  await page.locator('input[name="starter-biome"][value="tundra"]').check();
+  await page.clock.fastForward(65000);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
+  expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBeNull();
+  await page.reload();
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBeNull();
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  const created = await readState(page);
+  expect(created.pet.stage).toBe('egg');
+  expect(created.pet.growthSeconds).toBeLessThan(2);
+});
+
+test('una partida v2 válida entra directamente al refugio y conserva su compañero', async ({
+  page,
+}) => {
+  const previous = bornState('adult', 1);
+  previous.pet.name = 'Nela';
+  previous.currentBiome = 'tundra';
+  previous.coins = 321;
+  previous.inventory.food['sea-soup'] = 3;
+  await seedState(page, previous);
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
+  await expect(page.locator('#pet-name')).toHaveText('Nela');
+  const restored = await readState(page);
+  expect(restored.pet.id).toBe(previous.pet.id);
+  expect(restored.pet.stage).toBe('adult');
+  expect(restored.pet.biome).toBe(previous.pet.biome);
+  expect(restored.currentBiome).toBe('tundra');
+  expect(restored.coins).toBe(321);
+  expect(restored.inventory).toEqual(previous.inventory);
+  expect(restored.freePets.map((pet) => pet.id)).toEqual(previous.freePets.map((pet) => pet.id));
+});
+
+test('la bienvenida permite escoger y comenzar solo con teclado', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  await page.locator('input[name="starter-egg"][value="speckled"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('input[name="starter-egg"][value="striped"]')).toBeChecked();
+  await page.locator('input[name="starter-biome"][value="forest"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('input[name="starter-biome"][value="tundra"]')).toBeChecked();
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
+  const state = await readState(page);
+  expect(state.pet.seed % 3).toBe(1);
+  expect(state.pet.biome).toBe('tundra');
+});
+
+test('la selección inicial cabe en móvil y deja alcanzar el botón para comenzar', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const dialog = page.locator('#welcome-dialog');
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('input[name="starter-egg"][value="starry"]').check();
+  await page.locator('input[name="starter-biome"][value="tundra"]').check();
+  const begin = page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true });
+  await begin.scrollIntoViewIfNeeded();
+  const button = await begin.boundingBox();
+  expect(button!.y).toBeGreaterThanOrEqual(0);
+  expect(button!.y + button!.height).toBeLessThanOrEqual(667);
+  await page.screenshot({ path: 'artifacts/xisverso-welcome-mobile.png' });
+  await begin.click();
+  await expect(dialog).not.toBeVisible();
+  expect((await readState(page)).pet.biome).toBe('tundra');
+});
+
+test('otra pestaña en bienvenida retoma la partida iniciada sin sobrescribirla', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  const other = await context.newPage();
+  await other.goto('/');
+  await expect(other.locator('#welcome-dialog')).toBeVisible();
+  await other.locator('input[name="starter-egg"][value="striped"]').check();
+  await other.locator('input[name="starter-biome"][value="tundra"]').check();
+  await page.locator('input[name="starter-egg"][value="starry"]').check();
+  await page.locator('input[name="starter-biome"][value="coast"]').check();
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  const first = await readState(page);
+  await expect(other.locator('#welcome-dialog')).not.toBeVisible();
+  await expect(other.locator('canvas')).toHaveAttribute('data-origin-biome', 'coast');
+  const adopted = await readState(other);
+  expect(adopted.pet.id).toBe(first.pet.id);
+  expect(adopted.pet.seed).toBe(first.pet.seed);
+  expect(adopted.currentBiome).toBe('coast');
+  await other.reload();
+  await expect(other.locator('#welcome-dialog')).not.toBeVisible();
+  expect((await readState(other)).pet.id).toBe(first.pet.id);
 });

@@ -14,6 +14,14 @@ El refugio Canvas 2D es la pantalla principal. La interfaz HTML añade herramien
 
 La escena comunica interacciones; no decide recursos ni cambia necesidades. Cada operación del dominio produce un estado nuevo y el coordinador lo guarda antes de actualizar la presentación.
 
+## Primera entrada
+
+Si no hay una partida v2 válida ni un respaldo v1 recuperable, la interfaz abre una bienvenida modal para escoger un patrón de huevo y el bioma de crianza. El borrador es solo una vista previa: no se guarda ni avanza la incubación, incluso si el usuario espera o recarga antes de confirmar. Los guardados válidos omiten esta pantalla.
+
+`createStarterGame` construye la partida inicial elegida. Los patrones Moteado, Rayado y Estelar se codifican de manera estable en la semilla; el origen sigue siendo `pet.biome` y la ubicación inicial `currentBiome`. Se conserva el esquema v2 y no se modifica el comportamiento de la migración ni de los huevos que aparecen al liberar adultos.
+
+Al confirmar se fija el inicio de la crianza y se guarda la elección. Si otra pestaña ya inició una partida mientras esta seguía en la bienvenida, debe retomarse ese guardado y cerrarse el selector para evitar reemplazar la historia creada.
+
 ## Identidad, etapa y lugar
 
 La mascota activa conserva ID, nombre, semilla, bioma de origen, necesidades, vínculo, edad efectiva de crecimiento e historial de recetas. La etapa se deriva del crecimiento: huevo, joven o adulto. La incubación dura 60 segundos y la etapa joven otros 600 segundos efectivos. Dar calor al huevo añade 10 segundos de progreso; los cuidados y las recetas añaden crecimiento después de nacer. La representación cambia con la etapa, no por visitar otro lugar.

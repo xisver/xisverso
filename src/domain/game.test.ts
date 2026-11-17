@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BIOMES,
+  STARTER_EGGS,
+  createStarterGame,
+  getEggPattern,
   MATERIALS,
   RECIPES,
   LIFECYCLE,
@@ -561,4 +564,100 @@ test('a backwards clock cannot complete a pending expedition early', () => {
   const finished = completeExpedition(restored, state.expedition!.endsAt);
   assert.equal(finished.success, true);
   assert.equal(completeExpedition(finished.state, finished.state.lastUpdated).success, false);
+});
+
+test('all nine first-visit choices create the selected egg in its chosen birth biome', () => {
+  for (const egg of STARTER_EGGS) {
+    for (const biome of BIOMES) {
+      const state = createStarterGame(egg.id, biome.id, NOW);
+      assert.equal(state.version, 2);
+      assert.equal(state.pet.stage, 'egg');
+      assert.equal(state.pet.growthSeconds, 0);
+      assert.equal(state.lastUpdated, NOW);
+      assert.equal(state.currentBiome, biome.id);
+      assert.equal(state.pet.biome, biome.id);
+      assert.equal(state.pet.seed % 3, egg.pattern);
+      assert.equal(getEggPattern(state.pet.seed), egg.id);
+      assert.equal(state.pet.id, `xis-${NOW.toString(36)}-${state.pet.seed.toString(36)}-0`);
+      assert.deepEqual(parseSave(serializeSave(state), NOW), state);
+    }
+  }
+});
+
+test('starter shell patterns remain inside UInt32 at the random range boundaries', (context) => {
+  for (const random of [0, 0.5, 1 - Number.EPSILON]) {
+    context.mock.method(Math, 'random', () => random);
+    try {
+      for (const egg of STARTER_EGGS) {
+        const state = createStarterGame(egg.id, 'tundra', NOW);
+        assert.ok(Number.isInteger(state.pet.seed));
+        assert.ok(state.pet.seed >= 0 && state.pet.seed <= 0xffff_ffff);
+        assert.equal(getEggPattern(state.pet.seed), egg.id);
+        assert.ok(parseSave(serializeSave(state), NOW));
+      }
+    } finally {
+      context.mock.restoreAll();
+    }
+  }
+  assert.equal(getEggPattern(0xffff_ffff), 'speckled');
+});
+
+test('invalid starter choices and invalid seeds fail without silently choosing a default', () => {
+  for (const value of ['', 'unknown', '__proto__', null, undefined]) {
+    assert.throws(
+      () => createStarterGame(value as Parameters<typeof createStarterGame>[0], 'forest', NOW),
+      RangeError,
+    );
+    assert.throws(
+      () => createStarterGame('speckled', value as Parameters<typeof createStarterGame>[1], NOW),
+      RangeError,
+    );
+  }
+  for (const seed of [-1, 0.25, NaN, Infinity, 0x1_0000_0000])
+    assert.throws(() => getEggPattern(seed), RangeError);
+});
+
+test('the selected shell pattern and origin survive growth, travel, release and restoration', () => {
+  for (const choice of STARTER_EGGS) {
+    const egg = createStarterGame(choice.id, 'coast', NOW);
+    const grown = advanceTime(egg, NOW + ADULT_SECONDS * 1000);
+    const traveled = changeBiome(grown, 'tundra', grown.lastUpdated);
+    assert.equal(traveled.pet.stage, 'adult');
+    assert.equal(traveled.pet.biome, 'coast');
+    assert.equal(traveled.pet.seed, egg.pet.seed);
+    assert.equal(traveled.pet.id, egg.pet.id);
+    assert.equal(getEggPattern(traveled.pet.seed), choice.id);
+    const released = releaseAdult(traveled, traveled.lastUpdated);
+    assert.equal(released.success, true);
+    assert.equal(released.state.freePets[0].biome, 'coast');
+    assert.equal(released.state.freePets[0].habitatBiome, 'tundra');
+    assert.equal(getEggPattern(released.state.freePets[0].seed), choice.id);
+    assert.deepEqual(
+      parseSave(serializeSave(released.state), traveled.lastUpdated),
+      released.state,
+    );
+  }
+});
+
+test('starter choices preserve the same care resources and progression as ordinary new games', () => {
+  const baseline = createGame(NOW);
+  for (const choice of STARTER_EGGS) {
+    const state = createStarterGame(choice.id, 'coast', NOW);
+    assert.deepEqual(state.inventory, baseline.inventory);
+    assert.deepEqual(state.pet.needs, baseline.pet.needs);
+    assert.deepEqual(state.pet.diet, baseline.pet.diet);
+    assert.equal(state.coins, baseline.coins);
+    assert.equal(state.xp, baseline.xp);
+    assert.equal(state.level, baseline.level);
+    assert.equal(state.pet.bond, baseline.pet.bond);
+    const youngPet = advanceTime(state, NOW + LIFECYCLE.eggSeconds * 1000);
+    const fed = applyCare(youngPet, 'feed', youngPet.lastUpdated);
+    assert.equal(fed.success, true);
+    assert.equal(fed.state.inventory.food['fruit-bowl'], 0);
+    assert.equal(fed.state.coins, 80);
+    assert.equal(fed.state.pet.diet['fruit-bowl'], 1);
+    const played = rewardMiniGame(fed.state, 2, fed.state.lastUpdated);
+    assert.equal(played.reward, 7);
+    assert.equal(played.state.coins, 87);
+  }
 });

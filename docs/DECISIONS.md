@@ -16,6 +16,12 @@ La simulación permanece separada del dibujo. Si se decide incorporar 3D, sus re
 
 Referencias de las APIs utilizadas: [formas en Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Drawing_shapes), [animación](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Basic_animations) y [movimiento reducido](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
 
+## Elegir el primer compañero
+
+La primera partida ofrece tres huevos visuales —Moteado, Rayado y Estelar— y tres biomas de crianza. Los patrones no conceden ventajas de cuidado ni anticipan ramas de evolución por alimentación; el jugador elige la apariencia y el primer hogar que prefiera.
+
+La elección se confirma una vez, antes de empezar la incubación. Las partidas existentes conservan su identidad y entran directamente al refugio. El esquema de guardado sigue en v2: la semilla preserva el patrón y el bioma de origen conserva los rasgos del lugar de crianza.
+
 ## Crecer y dejar vivir
 
 Un huevo recibe calor, nace como joven y crece hasta adulto. Los tiempos son breves y configurables para probar el ciclo. El adulto se puede dejar libre en el lugar visitado: permanece disponible para visitarlo, convivir y acompañar expediciones. Esto abre la crianza de otro huevo sin borrar al compañero anterior.

@@ -5,6 +5,14 @@ export type Action = 'feed' | 'clean' | 'rest' | 'pet';
 export type PetStage = 'egg' | 'young' | 'adult';
 export type MaterialId = 'berries' | 'grain' | 'kelp' | 'root' | 'herb';
 export type RecipeId = 'fruit-bowl' | 'sea-soup' | 'root-stew';
+export type StarterEggId = 'speckled' | 'striped' | 'starry';
+
+export interface StarterEggDefinition {
+  id: StarterEggId;
+  name: string;
+  description: string;
+  pattern: 0 | 1 | 2;
+}
 
 export interface Pet {
   id: string;
@@ -73,6 +81,27 @@ export interface RecipeDefinition {
   hungerRelief: number;
   growthBonus: number;
 }
+/** The shell pattern is encoded in the existing seed, so all v2 saves remain compatible. */
+export const STARTER_EGGS: readonly StarterEggDefinition[] = [
+  {
+    id: 'speckled',
+    name: 'Moteado',
+    description: 'Una cáscara salpicada de pequeñas motas.',
+    pattern: 0,
+  },
+  {
+    id: 'striped',
+    name: 'Rayado',
+    description: 'Franjas suaves que rodean la cáscara.',
+    pattern: 1,
+  },
+  {
+    id: 'starry',
+    name: 'Estelar',
+    description: 'Pequeñas estrellas sobre un nuevo comienzo.',
+    pattern: 2,
+  },
+];
 export const BIOMES: readonly BiomeDefinition[] = [
   {
     id: 'forest',
@@ -240,6 +269,37 @@ export function createGame(now = Date.now()): GameState {
     lastUpdated: timestamp,
     activities: 0,
     miniGameBest: 0,
+  };
+}
+/** Resolve the immutable shell style from a valid persisted UInt32 seed. */
+export function getEggPattern(seed: number): StarterEggId {
+  if (!validInteger(seed, 0, 0xffff_ffff))
+    throw new RangeError('La semilla del huevo no es válida.');
+  return STARTER_EGGS[seed % STARTER_EGGS.length].id;
+}
+
+/** A first-visit choice changes identity and origin, without granting extra resources. */
+export function createStarterGame(
+  eggId: StarterEggId,
+  biome: BiomeId,
+  now = Date.now(),
+): GameState {
+  const choice = STARTER_EGGS.find((egg) => egg.id === eggId);
+  if (!choice) throw new RangeError('Ese tipo de huevo no está disponible.');
+  if (!biomeIds.includes(biome)) throw new RangeError('Ese bioma de crianza no está disponible.');
+  const state = createGame(now);
+  // Every bucket contains the three patterns, including at the upper UInt32 boundary.
+  const buckets = Math.floor(0x1_0000_0000 / STARTER_EGGS.length);
+  const seed = Math.floor(Math.random() * buckets) * STARTER_EGGS.length + choice.pattern;
+  return {
+    ...state,
+    currentBiome: biome,
+    pet: {
+      ...state.pet,
+      id: `xis-${state.lastUpdated.toString(36)}-${seed.toString(36)}-0`,
+      biome,
+      seed,
+    },
   };
 }
 function passTime(pet: Pet, biome: BiomeId, seconds: number): void {

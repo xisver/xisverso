@@ -6,6 +6,7 @@ Xisverso combina **Xisver + universo**. Es un juego local de mascotas originales
 
 ## Qué puedes hacer
 
+- Elegir al empezar un huevo **Moteado, Rayado o Estelar** y su bioma de crianza: bosque, costa o tundra.
 - Criar una mascota desde **huevo → joven → adulto**, con nombre editable, necesidades, vínculo y progreso.
 - Dar calor al huevo con Caricias; después de nacer, alimentar, bañar, acariciar y descansar dentro del refugio.
 - Dejar libre a una mascota adulta en el bioma que visitas y empezar a cuidar un nuevo huevo. Los adultos siguen en tu colección y puedes visitarlos.
@@ -20,13 +21,15 @@ Todo lo anterior ocurre entre mascotas de tu propia partida. Las cuentas, visita
 
 ## Cómo jugar
 
+La primera vez aparece una bienvenida para escoger tu huevo y su primer hogar. La crianza empieza al pulsar **Comenzar nuestra historia**; las selecciones previas no se guardan ni hacen avanzar la incubación. Si ya hay una partida válida, se abre directamente el refugio conservando tu compañero y su progreso.
+
 Toca el huevo para darle calor. Cuando nazca, toca el suelo para caminar y elige Caricias, Comida, Burbujas o Siesta antes de tocar a la mascota. También puedes arrastrar una herramienta hasta ella. La comida consume una porción preparada; seleccionar una herramienta no gasta recursos.
 
 Pulsa el nombre de tu compañero para consultar **Hambre**, energía, higiene, ánimo y crecimiento. **Hambre baja es mejor**: 0 significa que acaba de comer y 100 que tiene mucha hambre. Las otras tres necesidades funcionan al contrario: cuanto más altas, mejor.
 
 El letrero de exploración permite iniciar una salida y recoger sus materiales cuando termine. Selecciona hasta tres adultos de tu colección para acompañarte. La cocina muestra qué ingredientes necesitas, qué puedes preparar y cuántas porciones tienes.
 
-El bioma donde se crea el huevo fija sus rasgos procedurales. Llevar esa mascota de visita a otro bioma no la transforma. Al liberar un adulto, su hogar será el bioma actual; puedes volver a verlo allí y criar otro huevo.
+Los huevos Moteado, Rayado y Estelar tienen patrones visuales diferentes y reciben los mismos cuidados. Puedes combinar cualquiera con los tres biomas. El bioma donde se crea el huevo fija sus rasgos procedurales. Llevar esa mascota de visita a otro bioma no la transforma. Al liberar un adulto, su hogar será el bioma actual; puedes volver a verlo allí y criar otro huevo.
 
 El menú reúne tus mascotas, la cocina, la bitácora de esta sesión y el próximo capítulo de comunidad. Con teclado, 1–4 seleccionan herramientas y las flechas indican un destino para las mascotas nacidas. Tab y Enter recorren y activan los controles, incluida la mascota.
 
@@ -68,7 +71,7 @@ npm.cmd run check:pages
 
 Las pruebas de interfaz usan el puerto 4174 y una instancia aislada de Chrome sin ventana; no utilizan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado. `check:pages` valida además la compilación servida bajo `/xisverso/`.
 
-Las pruebas cubren migración, hambre, herramientas, crecimiento, liberación, visitas, exploración, cocina, interacción entre mascotas propias, luciérnagas, tamaños móviles y persistencia. La lógica de dominio se prueba por separado del DOM.
+Las pruebas cubren la bienvenida inicial, elección y persistencia de huevo y bioma, preservación de partidas existentes, espera sin incubación antes de confirmar, teclado, selección móvil y dos pestañas. También cubren migración, hambre, herramientas, crecimiento, liberación, visitas, exploración, cocina, interacción entre mascotas propias, luciérnagas, tamaños móviles y persistencia. La lógica de dominio se prueba por separado del DOM.
 
 También puedes ejecutar `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`. La opción de ejecución se aplica solo a ese proceso.
 

@@ -1,6 +1,9 @@
 import './style.css';
 import {
   BIOMES,
+  STARTER_EGGS,
+  createStarterGame,
+  type StarterEggId,
   MATERIALS,
   RECIPES,
   getLifeProgress,
@@ -84,6 +87,9 @@ try {
   saveAvailable = false;
 }
 let state = initial ?? createGame();
+let needsOnboarding = initial === null;
+let starterEgg: StarterEggId = 'speckled';
+let starterBiome: BiomeId = 'forest';
 let sleepingUntil = 0;
 let selectedCompanions = new Set<string>();
 let lastRenderedId = state.pet.id;
@@ -132,6 +138,14 @@ app.innerHTML = `
     <span class="tool-cursor" id="tool-cursor" hidden aria-hidden="true"></span>
   </main>
   <div id="toast" class="game-toast" role="status" aria-live="polite"></div>
+  <dialog id="welcome-dialog" class="welcome-dialog" aria-labelledby="welcome-title" aria-describedby="welcome-description">
+    <form id="welcome-form">
+      <div class="welcome-intro"><span class="welcome-brand">${icon('leaf')} Xisverso <small>UN MUNDO DE XISSOFT</small></span><p class="eyebrow">CADA GRAN AMISTAD EMPIEZA EN PEQUEÑO</p><h2 id="welcome-title">Su historia<br> empieza contigo.</h2><p id="welcome-description">Elige un pequeño huevo y el primer lugar que llamarán hogar.</p><div id="starter-preview" class="starter-preview" aria-hidden="true">${starterEggSvg(starterEgg, starterBiome, 'hero')}</div><div class="starter-preview-caption"><span class="preview-spark">✧</span><strong id="starter-summary">Moteado · Bosque Susurro</strong><p>Un mundo entero por descubrir juntos.</p></div></div>
+      <div class="welcome-choices"><fieldset class="starter-fieldset"><legend><span>01</span> Elige tu huevo</legend><p class="starter-section-note">Tres pequeños comienzos, todos llenos de posibilidades.</p><div class="starter-egg-grid">${STARTER_EGGS.map((egg) => `<label class="starter-choice egg-choice"><input type="radio" name="starter-egg" value="${egg.id}" aria-label="Huevo ${egg.name}" ${egg.id === starterEgg ? 'checked' : ''} /><span class="starter-egg-art" data-egg-preview="${egg.id}" aria-hidden="true">${starterEggSvg(egg.id, starterBiome, 'card')}</span><strong>${egg.name}</strong><small>${egg.description}</small></label>`).join('')}</div></fieldset>
+      <fieldset class="starter-fieldset"><legend><span>02</span> Su primer hogar</legend><p class="starter-section-note">Este bioma le dará sus rasgos. Después podrán viajar sin cambiarlos.</p><div class="starter-biome-grid">${BIOMES.map((biome) => `<label class="starter-choice biome-choice ${biome.id}"><input type="radio" name="starter-biome" value="${biome.id}" aria-label="${biome.name}" ${biome.id === starterBiome ? 'checked' : ''}/><span class="starter-biome-icon" aria-hidden="true">${icon({ forest: 'leaf', coast: 'wave', tundra: 'mountain' }[biome.id])}</span><strong>${biome.label}</strong><small>${biome.name}</small></label>`).join('')}</div></fieldset>
+      <p id="welcome-notice" class="welcome-notice" role="status" hidden></p><button id="begin-adventure" class="primary-button welcome-start" type="submit">Comenzar nuestra historia ${icon('arrow')}</button><p class="welcome-save-note">Tu elección se guarda al comenzar. Crezcan a su propio ritmo.</p></div>
+    </form>
+  </dialog>
   <dialog id="pet-dialog" class="sheet-dialog" aria-labelledby="pet-sheet-title"><button class="dialog-close" data-close="pet-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UN RATITO PARA CONOCERSE</span><div class="pet-sheet-heading"><div><h2 id="pet-sheet-title">Cómo está <span id="needs-name">Nubi</span></h2><p class="muted"><span class="species-tag">Brotín</span> · <span id="pet-description">Un espíritu curioso del bosque</span></p></div><button id="rename-button" class="icon-button" aria-label="Cambiar nombre">${icon('edit')}</button></div><div class="life-panel"><div><strong id="life-label">Huevo</strong><span id="life-next">Un nuevo comienzo</span></div><div id="life-progress" class="life-track" role="progressbar" aria-label="Crecimiento" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="life-fill"></span></div><p id="origin-biome" class="muted"></p><p id="life-help" class="muted"></p></div><div id="needs-list" class="needs-list"></div><div class="bond-panel"><div>${icon('heart')}<strong>Su vínculo contigo</strong><span id="bond-label">12%</span></div><div class="bond-track"><span id="bond-fill"></span></div><p id="bond-description">Una amistad que apenas comienza.</p></div><div class="level-info"><span class="level-badge">1</span><div><strong id="level-label">Pequeño explorador</strong><span id="xp-label">0 / 100 XP</span><div class="xp-track"><span id="xp-fill"></span></div></div></div><button id="release-pet" class="secondary-button release-button" hidden>Dejar libre y criar otro huevo ${icon('leaf')}</button><p id="best-score" class="best-score">Su primera aventura los espera.</p><button class="text-button" data-close="pet-dialog">Volver a nuestro mundo ${icon('arrow')}</button></dialog>
   <dialog id="travel-dialog" class="travel-dialog" aria-labelledby="travel-title"><button class="dialog-close" data-close="travel-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">¿A DÓNDE VAMOS HOY?</span><h2 id="travel-title">Un mundo por descubrir.</h2><p class="muted">Lleva a tu compañero a un nuevo rincón. Su amistad viaja con ustedes.</p><div id="biome-cards" class="biome-cards"></div><p class="view-footnote">Viajar conserva su identidad. Un nuevo huevo hereda los rasgos del bioma donde comienza su crianza.</p></dialog>
   <dialog id="menu-dialog" class="menu-dialog" aria-labelledby="menu-title"><button class="dialog-close" data-close="menu-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">XISVERSO</span><h2 id="menu-title">Tu pequeño universo.</h2><div class="menu-actions"><button data-open="pet-dialog">${icon('heart')} Mi compañero ${icon('arrow')}</button><button data-open="travel-dialog">${icon('compass')} Explorar el mundo ${icon('arrow')}</button><button data-open="sanctuary-dialog">${icon('friends')} Mis mascotas ${icon('arrow')}</button><button data-open="kitchen-dialog">${icon('food')} Cocinar ${icon('arrow')}</button><button data-open="explore-dialog">${icon('compass')} Expediciones ${icon('arrow')}</button><button data-open="journal-dialog">${icon('book')} Mi bitácora ${icon('arrow')}</button><button data-open="community-dialog">${icon('friends')} Comunidad ${icon('arrow')}</button></div><p class="controls-help">Toca el suelo para caminar. Elige una herramienta y toca a tu mascota; también puedes arrastrar la herramienta hasta ella.</p><p class="controls-help">Teclado: 1–4 eligen herramienta, flechas para caminar y Espacio para interactuar. Tab recorre los controles.</p><button class="primary-button" data-close="menu-dialog">Volver al refugio ${icon('arrow')}</button></dialog>
@@ -213,6 +227,93 @@ function refreshOpenPanels() {
   if ($<HTMLDialogElement>('#sanctuary-dialog').open) renderSanctuary();
   if ($<HTMLDialogElement>('#explore-dialog').open && state.expedition) renderExplore();
 }
+function starterEggSvg(egg: StarterEggId, biome: BiomeId, context: string) {
+  const palette = {
+    forest: { shell: '#e9edd0', shade: '#b5c991', ink: '#8da96b' },
+    coast: { shell: '#dceee8', shade: '#97c9ca', ink: '#689ea6' },
+    tundra: { shell: '#eee5f0', shade: '#c4afd1', ink: '#9c83b3' },
+  }[biome];
+  const id = `starter-${context}-${egg}-${biome}`;
+  const shape = 'M90 18C58 19 28 81 32 122C37 181 143 181 148 122C152 81 122 19 90 18Z';
+  const marks =
+    egg === 'speckled'
+      ? '<ellipse cx="72" cy="68" rx="9" ry="6" transform="rotate(-25 72 68)"/><ellipse cx="111" cy="87" rx="7" ry="11" transform="rotate(20 111 87)"/><ellipse cx="57" cy="122" rx="8" ry="6"/><ellipse cx="96" cy="135" rx="10" ry="7" transform="rotate(-15 96 135)"/><ellipse cx="127" cy="124" rx="5" ry="8"/><circle cx="92" cy="102" r="4"/>'
+      : egg === 'striped'
+        ? `<g fill="none" stroke="${palette.ink}" stroke-width="10" stroke-linecap="round"><path d="M30 66Q90 96 150 66"/><path d="M22 99Q90 132 158 99"/><path d="M25 133Q90 159 155 133"/></g>`
+        : '<path d="m67 61 3 9 10 1-8 6 2 10-8-6-8 5 3-9-7-6 10-1Z"/><path d="m112 93 3 10 11 2-9 6 2 11-8-7-9 6 3-10-8-7 11-1Z"/><path d="m72 125 3 9 10 2-8 6 2 10-8-6-9 5 4-10-8-6 11-1Z"/><circle cx="97" cy="65" r="3"/><circle cx="57" cy="102" r="3"/><circle cx="121" cy="139" r="3"/>';
+  return `<svg viewBox="0 0 180 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${id}-g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf4"/><stop offset=".55" stop-color="${palette.shell}"/><stop offset="1" stop-color="${palette.shade}"/></linearGradient><clipPath id="${id}-clip"><path d="${shape}"/></clipPath></defs><ellipse cx="90" cy="174" rx="63" ry="12" fill="#80975b15"/><ellipse cx="90" cy="170" rx="52" ry="10" fill="#d7c99d"/><path d="${shape}" fill="url(#${id}-g)" stroke="#ffffffa0" stroke-width="2"/><g clip-path="url(#${id}-clip)" fill="${palette.ink}" opacity=".65">${marks}</g><ellipse cx="59" cy="70" rx="9" ry="22" fill="#fffdf7" opacity=".55" transform="rotate(24 59 70)"/></svg>`;
+}
+function renderStarterChoice() {
+  $('#starter-preview').innerHTML = starterEggSvg(starterEgg, starterBiome, 'hero');
+  $('#starter-preview').dataset.biome = starterBiome;
+  $('#starter-summary').textContent =
+    `${STARTER_EGGS.find((egg) => egg.id === starterEgg)!.name} · ${biomeName(starterBiome)}`;
+  document.querySelectorAll<HTMLElement>('[data-egg-preview]').forEach((preview) => {
+    preview.innerHTML = starterEggSvg(
+      preview.dataset.eggPreview as StarterEggId,
+      starterBiome,
+      'card',
+    );
+  });
+  state = createStarterGame(starterEgg, starterBiome, Date.now());
+  lastRenderedId = state.pet.id;
+  lastRenderedStage = state.pet.stage;
+  renderState();
+}
+function useExistingGame(restored: GameState) {
+  state = restored;
+  if (needsOnboarding) {
+    needsOnboarding = false;
+    $<HTMLDialogElement>('#welcome-dialog').close();
+    lastRenderedId = state.pet.id;
+    lastRenderedStage = state.pet.stage;
+    addEvent(`${state.pet.name} se alegra de verte de nuevo.`, 'leaf');
+    say('¡Aquí estamos! Nuestra aventura continúa.');
+  }
+  renderState();
+  refreshOpenPanels();
+}
+function beginAdventure() {
+  if (!needsOnboarding) return;
+  // A different tab may already have started a valid game while this chooser was open.
+  try {
+    const existing =
+      parseSave(localStorage.getItem(SAVE_KEY), Date.now()) ??
+      parseSave(localStorage.getItem(LEGACY_SAVE_KEY), Date.now());
+    if (existing) {
+      useExistingGame(existing);
+      persist();
+      return;
+    }
+  } catch {
+    /* Storage can be blocked; the chosen game still runs for this session. */
+  }
+  state = createStarterGame(starterEgg, starterBiome, Date.now());
+  needsOnboarding = false;
+  lastRenderedId = state.pet.id;
+  lastRenderedStage = state.pet.stage;
+  lastAutoSave = Date.now();
+  sleepingUntil = 0;
+  lastCare = -Infinity;
+  $<HTMLDialogElement>('#welcome-dialog').close();
+  renderState();
+  renderBiomes();
+  selectTool('hand');
+  persist();
+  addEvent(`${state.pet.name} empieza su historia en ${biomeName(state.currentBiome)}.`, 'egg');
+  say('Un pequeño comienzo. Dale calor a tu huevo.', 6500);
+  if (!saveAvailable) toast('El navegador no permite guardar. El progreso durará esta sesión.');
+}
+function showWelcome() {
+  renderStarterChoice();
+  const notice = $('#welcome-notice');
+  notice.hidden = !corruptSave && saveAvailable;
+  notice.textContent = corruptSave
+    ? 'No pudimos recuperar la partida anterior. Elige un nuevo comienzo.'
+    : 'El navegador no permite guardar. Podrás jugar durante esta sesión.';
+  $<HTMLDialogElement>('#welcome-dialog').showModal();
+  $('#tool-cursor').hidden = true;
+}
 function reconcileSavedState() {
   try {
     const restored = parseSave(localStorage.getItem(SAVE_KEY), Date.now());
@@ -222,6 +323,7 @@ function reconcileSavedState() {
   }
 }
 function persist() {
+  if (needsOnboarding) return;
   try {
     localStorage.setItem(SAVE_KEY, serializeSave(state));
     saveAvailable = true;
@@ -612,6 +714,7 @@ function interactWithPet(tool: SceneTool = selectedTool) {
   care(tool === 'hand' ? 'pet' : tool);
 }
 function care(action: Action) {
+  if (needsOnboarding) return;
   if (performance.now() - lastCare < 850) return;
   lastCare = performance.now();
   reconcileSavedState();
@@ -751,11 +854,14 @@ function closeGame() {
 
 document.addEventListener('change', (event) => {
   const input = event.target;
-  if (
-    !(input instanceof HTMLInputElement) ||
-    !input.matches('#expedition-party input[data-companion]')
-  )
+  if (!(input instanceof HTMLInputElement)) return;
+  if (needsOnboarding && (input.name === 'starter-egg' || input.name === 'starter-biome')) {
+    if (input.name === 'starter-egg') starterEgg = input.value as StarterEggId;
+    else starterBiome = input.value as BiomeId;
+    renderStarterChoice();
     return;
+  }
+  if (!input.matches('#expedition-party input[data-companion]')) return;
   if (!state.freePets.some((pet) => pet.id === input.value)) {
     input.checked = false;
     return;
@@ -767,6 +873,13 @@ document.addEventListener('change', (event) => {
     } else selectedCompanions.add(input.value);
   } else selectedCompanions.delete(input.value);
   updatePartySelection();
+});
+$('#welcome-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  beginAdventure();
+});
+$('#welcome-dialog').addEventListener('cancel', (event) => {
+  if (needsOnboarding) event.preventDefault();
 });
 document.addEventListener('click', (event) => {
   const target = (event.target as Element).closest<HTMLElement>('button, a.game-brand');
@@ -973,13 +1086,14 @@ let positionFrame = requestAnimationFrame(followPet);
 window.addEventListener('storage', (event) => {
   if (event.key !== SAVE_KEY || !event.newValue) return;
   const restored = parseSave(event.newValue, Date.now());
-  if (restored) {
-    state = restored;
-    renderState();
-    refreshOpenPanels();
-  }
+  if (restored) useExistingGame(restored);
 });
 window.addEventListener('pagehide', () => {
+  if (needsOnboarding) {
+    if (positionFrame) cancelAnimationFrame(positionFrame);
+    positionFrame = 0;
+    return;
+  }
   reconcileSavedState();
   state = advanceTime(state, Date.now());
   persist();
@@ -987,6 +1101,10 @@ window.addEventListener('pagehide', () => {
   positionFrame = 0;
 });
 window.addEventListener('pageshow', () => {
+  if (needsOnboarding) {
+    if (!document.hidden && !positionFrame) positionFrame = requestAnimationFrame(followPet);
+    return;
+  }
   reconcileSavedState();
   state = advanceTime(state, Date.now());
   renderState();
@@ -994,6 +1112,10 @@ window.addEventListener('pageshow', () => {
   if (gameRunning && performance.now() >= gameEnds) finishGame();
 });
 document.addEventListener('visibilitychange', () => {
+  if (needsOnboarding) {
+    if (!document.hidden && !positionFrame) positionFrame = requestAnimationFrame(followPet);
+    return;
+  }
   reconcileSavedState();
   if (!document.hidden) {
     state = advanceTime(state, Date.now());
@@ -1004,6 +1126,7 @@ document.addEventListener('visibilitychange', () => {
   persist();
 });
 setInterval(() => {
+  if (needsOnboarding) return;
   const previousStage = state.pet.stage;
   reconcileSavedState();
   state = advanceTime(state, Date.now());
@@ -1015,6 +1138,7 @@ setInterval(() => {
 }, 1000);
 setInterval(() => {
   if (
+    needsOnboarding ||
     document.hidden ||
     document.querySelector('dialog[open]') ||
     gameRunning ||
@@ -1039,26 +1163,24 @@ setInterval(() => {
     4500,
   );
 }, 25000);
-addEvent(
-  initial
-    ? `${state.pet.name} se alegra de verte de nuevo.`
-    : `${state.pet.name} llegó a su nuevo hogar. Aquí empieza su historia.`,
-  'leaf',
-);
 renderState();
 renderBiomes();
 selectTool('hand');
-persist();
-say(
-  state.pet.stage === 'egg'
-    ? 'Un pequeño comienzo. Dale calor a tu huevo.'
-    : '¡Volviste! ¿Damos una vuelta?',
-  6500,
-);
+if (needsOnboarding) showWelcome();
+else {
+  addEvent(`${state.pet.name} se alegra de verte de nuevo.`, 'leaf');
+  persist();
+  say(
+    state.pet.stage === 'egg'
+      ? 'Un pequeño comienzo. Dale calor a tu huevo.'
+      : '¡Volviste! ¿Damos una vuelta?',
+    6500,
+  );
+}
 if (corruptSave)
   toast(
     restoredBackup
       ? 'El guardado anterior estaba dañado. Recuperamos la copia de tu partida anterior.'
-      : 'El guardado anterior estaba dañado. Creamos un nuevo hogar para empezar.',
+      : 'El guardado anterior estaba dañado. Elige un huevo para empezar una nueva historia.',
   );
 if (!saveAvailable) toast('El navegador no permite guardar. El progreso durará esta sesión.');
