@@ -10,7 +10,9 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test src/domain/game.test.ts",
     "test:e2e": "playwright test",
-    "format": "prettier --write src tests docs *.json *.ts *.html README.md AGENTS.md .github"
+    "format": "prettier --write src tests docs *.json *.ts *.html README.md AGENTS.md .github",
+    "build:pages": "tsc --noEmit && vite build --base=/xisverso/",
+    "check:pages": "npm run build:pages && node scripts/check-pages.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",

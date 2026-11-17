@@ -78,21 +78,12 @@ Cubren selección y uso de herramientas sobre la mascota, desplazamiento sin gas
 
 También puedes iniciar el proyecto con `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`. El parámetro de ejecución se aplica solo a ese proceso, sin cambiar la configuración del sistema.
 
-## Repositorio en GitHub
+## GitHub y GitHub Pages
 
-Nombre previsto: `xisver/xisverso`, privado. El código está preparado localmente; la publicación remota requiere una sesión autorizada de GitHub CLI.
+El repositorio previsto es `xisver/xisverso` y el juego puede publicarse en `https://xisver.github.io/xisverso/`. La configuración y los scripts están preparados localmente; falta completar la autenticación y la publicación remota.
 
-```powershell
-# Si no tienes instalada la herramienta oficial:
-winget install --id GitHub.cli --exact
+Sigue la [guía completa con comandos PowerShell](docs/GITHUB_PAGES.md) para instalar GitHub CLI, subir el proyecto y activar Pages. Puedes elegir `-Visibility public` para Pages con GitHub Free, o `-Visibility private` si tu plan lo permite. Los scripts no cambian automáticamente la visibilidad de un repositorio existente.
 
-# Completa personalmente el inicio de sesión que indique GitHub CLI:
-gh auth login
-
-# Con los cambios revisados y guardados en un commit:
-powershell -ExecutionPolicy Bypass -File .\scripts\publish-github.ps1
-```
-
-El script comprueba la cuenta `xisver`, crea el repositorio privado si no existe y sube `main`. No extrae ni muestra tokens, no cambia la visibilidad de un repositorio existente y no fuerza el historial remoto. No se debe compartir ninguna credencial en el chat.
+`npm.cmd run build:pages` genera las rutas para `/xisverso/`; `npm.cmd run check:pages` verifica la compilación bajo ese subdirectorio con Chrome sin ventana. El workflow publica automáticamente los siguientes pushes a `main` una vez activado Pages.
 
 El nombre del producto ya es Xisverso. La carpeta física conserva por ahora `TAMAGOTCHI` porque Windows impide renombrarla mientras la sesión actual la utiliza.
