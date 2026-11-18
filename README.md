@@ -15,7 +15,7 @@ Xisverso combina **Xisver + universo**. Es un juego de mascotas originales: incu
 - Jugar seis minijuegos de 20 segundos en los que participa tu mascota.
 - Ganar puntos jugando y comprar seis decoraciones para el mundo, sin dinero real.
 - Escuchar música ambiental propia de cada bioma y efectos de sonido, con controles independientes.
-- Compartir una vista de tu refugio y visitar el de un amigo mediante un código con la conexión Firebase configurada localmente.
+- Compartir una vista de tu refugio y visitar el de un amigo mediante un código con Firebase.
 
 ## Cómo jugar
 
@@ -55,7 +55,7 @@ Cada navegador, dispositivo y origen conserva su propia partida. Borrar sus dato
 
 Las visitas de Firebase son voluntarias: se comparte manualmente una vista con nombre, bioma, apariencia de la mascota y decoraciones. Un amigo la abre con el código exacto. No se publica un directorio de usuarios ni se suben inventario, puntos o el guardado completo. El dueño puede retirar la vista. No hay interacción simultánea ni recompensas remotas.
 
-La conexión local utiliza el proyecto Firebase **Xisverso** (`xisverso-xissoft-20261117`), con aplicación web registrada, acceso anónimo y Firestore Standard gratuito en `nam5`, con facturación desactivada. Las reglas superaron 74 comprobaciones en emulador y el flujo real de visitas está verificado. Estos cambios del cliente siguen locales y todavía no aparecen en GitHub Pages. Consulta [Configuración de Firebase](docs/FIREBASE.md).
+La aplicación utiliza el proyecto Firebase **Xisverso** (`xisverso-xissoft-20261117`), con aplicación web registrada, acceso anónimo y Firestore Standard gratuito en `nam5`, con facturación desactivada. Las reglas superaron 74 comprobaciones en emulador y el flujo real de visitas está verificado. Las compilaciones de Pages reciben la configuración pública desde las variables del repositorio. Consulta [Configuración de Firebase](docs/FIREBASE.md).
 
 ## Ejecutar y verificar con PowerShell
 

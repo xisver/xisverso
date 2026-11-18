@@ -1,6 +1,6 @@
 # Publicar Xisverso en GitHub Pages
 
-El repositorio `xisver/xisverso` y el sitio [Xisverso en GitHub Pages](https://xisver.github.io/xisverso/) ya existen. Los pushes a `main` ejecutan el workflow de compilación y publicación. Estas instrucciones permiten actualizar el sitio o repetir su configuración; los cambios locales de esta iteración todavía necesitan subirse y completar ese workflow para aparecer allí.
+El repositorio `xisver/xisverso` y el sitio [Xisverso en GitHub Pages](https://xisver.github.io/xisverso/) ya existen. Los pushes a `main` ejecutan el workflow de compilación y publicación. Estas instrucciones permiten actualizar el sitio o repetir su configuración; cada actualización debe subirse y completar ese workflow para aparecer allí.
 
 ## 1. Elegir la visibilidad
 
@@ -75,7 +75,7 @@ El paso `npm run build:pages` lee esas variables desde `vars` y Vite las incorpo
 
 Si faltan las variables, el juego local sigue funcionando y las visitas aparecen sin configurar. Una actualización de variables se aplica en la siguiente compilación; no cambia un sitio ya compilado por sí sola. No se sube `.env.local` al repositorio.
 
-El proyecto **Xisverso** ya existe, con aplicación web, Auth anónima y Firestore Standard gratuito en `nam5`, con facturación desactivada. Las reglas superaron 74 comprobaciones en emulador y `check:firebase` verificó publicación, visita, retirada y limpieza contra el proyecto real sin alterar los recursos del visitante. Esto no actualiza el sitio de Pages: todavía hay que publicar los cambios del cliente con las variables de compilación. La modificación del workflow, por sí sola, no crea recursos ni despliega reglas. Consulta [FIREBASE.md](FIREBASE.md).
+El proyecto **Xisverso** ya existe, con aplicación web, Auth anónima y Firestore Standard gratuito en `nam5`, con facturación desactivada. Las reglas superaron 74 comprobaciones en emulador y `check:firebase` verificó publicación, visita, retirada y limpieza contra el proyecto real sin alterar los recursos del visitante. El cliente se publica con las variables de compilación indicadas. La modificación del workflow, por sí sola, no crea recursos ni despliega reglas. Consulta [FIREBASE.md](FIREBASE.md).
 
 ## Actualizaciones posteriores
 
@@ -104,7 +104,7 @@ No se necesita un token escrito en los archivos del proyecto: GitHub Actions uti
 
 ## Guardados y límites de Pages
 
-El navegador guarda por origen. La partida de `localhost` o `127.0.0.1` permanece allí; entrar a `https://xisver.github.io` crea un guardado independiente. Las partidas, inventarios y puntos siguen siendo locales. La nueva integración Firebase, configurada localmente y pendiente de publicar en Pages, comparte vistas de refugios; no añade guardado remoto ni convivencia multijugador.
+El navegador guarda por origen. La partida de `localhost` o `127.0.0.1` permanece allí; entrar a `https://xisver.github.io` crea un guardado independiente. Las partidas, inventarios y puntos siguen siendo locales. La integración Firebase comparte vistas de refugios; no añade guardado remoto ni convivencia multijugador.
 
 Si cambias el nombre del repositorio o añades un dominio propio, adapta primero `build:pages`, la URL y los scripts de publicación.
 

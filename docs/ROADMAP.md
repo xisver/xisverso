@@ -1,6 +1,6 @@
 # Ruta de Xisverso
 
-La prioridad es cerrar ciclos jugables pequeños antes de ampliar el mundo. El orden indica dependencias, no fechas comprometidas. La integración y verificación de esta iteración se realizan sobre el código local; no implica que los cambios ya estén publicados.
+La prioridad es cerrar ciclos jugables pequeños antes de ampliar el mundo. El orden indica dependencias, no fechas comprometidas. La integración exige pruebas locales y la publicación se verifica mediante el workflow asociado al commit.
 
 | Hito                      | Alcance                                                                                       | Criterio para avanzar                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -46,6 +46,6 @@ Usar `npm.cmd test`, `npm.cmd run build`, `npm.cmd run test:e2e` y `npm.cmd run 
 
 ## Activación de visitas y siguientes pasos
 
-El proyecto **Xisverso** (`xisverso-xissoft-20261117`) utiliza aplicación web, Auth anónima y Firestore Standard gratuito en `nam5`, con facturación desactivada. La conexión local y el flujo real están comprobados. Queda publicar los cambios del cliente; las variables públicas de Firebase alimentarán las futuras compilaciones de Pages. Las vistas se comparten manualmente por código; no hay listado de usuarios, listeners permanentes, interacción simultánea ni recompensas remotas.
+El proyecto **Xisverso** (`xisverso-xissoft-20261117`) utiliza aplicación web, Auth anónima y Firestore Standard gratuito en `nam5`, con facturación desactivada. La conexión y el flujo real están comprobados. La compilación de Pages incorpora las variables públicas de Firebase. Las vistas se comparten manualmente por código; no hay listado de usuarios, listeners permanentes, interacción simultánea ni recompensas remotas.
 
 Antes de ampliar la comunidad, definir público y edades, normas, bloqueo y reporte. Un servidor deberá validar identidad, propiedad, inventario y premios de cualquier modo compartido futuro. Reproducción, intercambios y economía entre usuarios se evaluarán después de validar esos límites.

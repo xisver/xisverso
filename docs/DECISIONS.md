@@ -6,7 +6,7 @@ Estas decisiones pueden revisarse con las pruebas del juego.
 
 **Xisverso** combina Xisver y universo. El desarrollo se firma **XisSoft** y el lema es «Un mundo vivo de XisSoft». Navegador, TypeScript, Vite y Canvas 2D comparten una base entre computadora y móvil. La partida y su economía son locales; Firebase añade visitas voluntarias a vistas del refugio.
 
-El repositorio es `xisver/xisverso` y el sitio existente se publica en GitHub Pages. Los cambios de esta iteración requieren validación y publicación para llegar al sitio. La carpeta de este checkout se llama `Xisverso`.
+El repositorio es `xisver/xisverso` y el sitio existente se publica en GitHub Pages. Cada actualización llega al sitio después de superar la validación y completar el workflow de publicación. La carpeta de este checkout se llama `Xisverso`.
 
 ## Arte procedural, tamaño y profundidad
 
@@ -60,7 +60,7 @@ El esquema v3 guarda Apetito, la etapa bebé y las decoraciones. La migración v
 
 Las visitas Firebase comparten manualmente una vista mínima del refugio mediante un código. Auth anónima identifica al propietario y Firestore Lite realiza lecturas puntuales, sin directorio ni listeners permanentes. El dueño puede retirar la vista. El guardado, las necesidades, el inventario y los puntos permanecen locales.
 
-El proyecto `xisverso-xissoft-20261117` utiliza aplicación web registrada, Auth anónima y base Firestore Standard gratuita en `nam5`, con facturación desactivada y sin productos de pago. Las reglas superaron 74 comprobaciones en emulador y el flujo real de publicación, visita y retirada quedó verificado, incluida la conservación de recursos del visitante y la limpieza de los datos e identidades temporales. El cliente continúa local: validar el backend no publica el frontend nuevo en Pages. No hay juego simultáneo ni premios remotos.
+El proyecto `xisverso-xissoft-20261117` utiliza aplicación web registrada, Auth anónima y base Firestore Standard gratuita en `nam5`, con facturación desactivada y sin productos de pago. Las reglas superaron 74 comprobaciones en emulador y el flujo real de publicación, visita y retirada quedó verificado, incluida la conservación de recursos del visitante y la limpieza de los datos e identidades temporales. El workflow de Pages compila el cliente con la configuración pública del proyecto. No hay juego simultáneo ni premios remotos.
 
 La economía local es modificable. Antes de cuentas, clasificaciones o intercambios se decidirá cómo importar progreso; el servidor deberá validar propiedad, recursos y resultados sin confiar en el guardado local.
 
