@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BIOMES,
+  DECORATIONS,
+  purchaseDecoration,
   STARTER_EGGS,
   createStarterGame,
   getEggPattern,
@@ -32,8 +34,10 @@ import {
 
 const NOW = 1_800_000_000_000;
 const HOUR = 3_600_000;
-const ADULT_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.youngSeconds;
-const young = () => advanceTime(createGame(NOW), NOW + LIFECYCLE.eggSeconds * 1000);
+const YOUNG_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds;
+const ADULT_SECONDS = YOUNG_SECONDS + LIFECYCLE.youngSeconds;
+const baby = () => advanceTime(createGame(NOW), NOW + LIFECYCLE.eggSeconds * 1000);
+const young = () => advanceTime(createGame(NOW), NOW + YOUNG_SECONDS * 1000);
 const adult = () => advanceTime(createGame(NOW), NOW + ADULT_SECONDS * 1000);
 function collection(count: number): GameState {
   let state = adult();
@@ -46,7 +50,7 @@ function collection(count: number): GameState {
 
 test('new games begin with an egg, ingredients and one prepared meal', () => {
   const state = createGame(NOW);
-  assert.equal(state.version, 2);
+  assert.equal(state.version, 3);
   assert.equal(state.pet.name, 'Nubi');
   assert.equal(state.pet.stage, 'egg');
   assert.equal(state.currentBiome, 'forest');
@@ -59,29 +63,35 @@ test('new games begin with an egg, ingredients and one prepared meal', () => {
   assert.deepEqual(parseSave(serializeSave(state), NOW), state);
 });
 
-test('life stages advance through egg, young and adult with stage-relative progress', () => {
+test('life stages take five hours, twenty hours and three days with relative progress', () => {
   const egg = createGame(NOW);
-  const almost = advanceTime(egg, NOW + 59_000);
-  const hatched = advanceTime(egg, NOW + 60_000);
-  const grown = advanceTime(egg, NOW + ADULT_SECONDS * 1000);
-  assert.equal(almost.pet.stage, 'egg');
-  assert.equal(hatched.pet.stage, 'young');
-  assert.equal(grown.pet.stage, 'adult');
+  assert.equal(LIFECYCLE.eggSeconds, 5 * 3600);
+  assert.equal(LIFECYCLE.babySeconds, 20 * 3600);
+  assert.equal(LIFECYCLE.youngSeconds, 72 * 3600);
+  for (const [seconds, beforeStage, nextStage] of [
+    [LIFECYCLE.eggSeconds, 'egg', 'baby'],
+    [YOUNG_SECONDS, 'baby', 'young'],
+    [ADULT_SECONDS, 'young', 'adult'],
+  ] as const) {
+    assert.equal(advanceTime(egg, NOW + seconds * 1000 - 1).pet.stage, beforeStage);
+    assert.equal(advanceTime(egg, NOW + seconds * 1000).pet.stage, nextStage);
+  }
   assert.deepEqual(getLifeProgress(egg.pet), {
     stage: 'egg',
     label: 'Huevo',
     percent: 0,
-    remainingSeconds: 60,
-    nextStage: 'Joven',
+    remainingSeconds: 18000,
+    nextStage: 'Bebé',
   });
-  assert.equal(getLifeProgress(hatched.pet).percent, 0);
-  assert.equal(getLifeProgress(grown.pet).percent, 100);
-  assert.equal(getLifeProgress(grown.pet).nextStage, null);
+  assert.equal(getLifeProgress(baby().pet).percent, 0);
+  assert.equal(getLifeProgress(baby().pet).nextStage, 'Joven');
+  assert.equal(getLifeProgress(young().pet).percent, 0);
+  assert.equal(getLifeProgress(adult().pet).percent, 100);
+  assert.equal(getLifeProgress(adult().pet).nextStage, null);
   assert.equal(egg.pet.growthSeconds, 0);
-  assert.equal(hatched.pet.seed, egg.pet.seed);
 });
 
-test('egg warmth accelerates hatching while other care does not consume food', () => {
+test('egg affection never skips incubation or farms bond, experience or resources', () => {
   const egg = createGame(NOW);
   const before = serializeSave(egg);
   for (const action of ['feed', 'clean', 'rest'] as const) {
@@ -90,24 +100,33 @@ test('egg warmth accelerates hatching while other care does not consume food', (
     assert.equal(result.state.inventory.food['fruit-bowl'], 1);
   }
   let state = egg;
-  for (let index = 0; index < 6; index++) state = applyCare(state, 'pet', NOW).state;
-  assert.equal(state.pet.stage, 'young');
-  assert.equal(state.pet.growthSeconds, 60);
+  for (let index = 0; index < 100; index++) {
+    const result = applyCare(state, 'pet', NOW);
+    assert.equal(result.success, true);
+    state = result.state;
+  }
+  assert.equal(state.pet.stage, 'egg');
+  assert.equal(state.pet.growthSeconds, 0);
+  assert.equal(state.pet.bond, egg.pet.bond);
+  assert.equal(state.xp, 0);
+  assert.equal(state.activities, 0);
+  assert.equal(state.coins, 80);
   assert.equal(serializeSave(egg), before);
-  assert.equal(state.activities, 6);
 });
 
-test('elapsed simulation is pure, bounded and capped at eight hours of absence', () => {
+test('age follows a long absence while deterioration stays bounded to eight waking hours', () => {
   const state = young();
   const before = serializeSave(state);
   const short = advanceTime(state, state.lastUpdated + MAX_OFFLINE_HOURS * HOUR);
   const long = advanceTime(state, state.lastUpdated + 1000 * HOUR);
   assert.deepEqual(short.pet.needs, long.pet.needs);
-  assert.equal(short.pet.growthSeconds, long.pet.growthSeconds);
+  assert.equal(short.pet.stage, 'young');
+  assert.equal(long.pet.stage, 'adult');
+  assert.equal(long.pet.growthSeconds, state.pet.growthSeconds + 1000 * 3600);
   assert.equal(long.lastUpdated, state.lastUpdated + 1000 * HOUR);
   assert.equal(serializeSave(state), before);
   assert.ok(Object.values(long.pet.needs).every((value) => value >= 0 && value <= 100));
-  assert.ok(long.pet.needs.hunger > state.pet.needs.hunger);
+  assert.ok(long.pet.needs.appetite < state.pet.needs.appetite);
   assert.ok(long.pet.needs.energy < state.pet.needs.energy);
 });
 
@@ -138,16 +157,16 @@ test('travel changes the visited biome and care rates without changing appearanc
   );
 });
 
-test('feeding lowers hunger, consumes cooked food and records diet without costing seeds', () => {
+test('feeding raises appetite, consumes cooked food and records diet without costing points', () => {
   const state = young();
   const before = serializeSave(state);
   const result = applyCare(state, 'feed', state.lastUpdated);
   assert.equal(result.success, true);
   assert.equal(result.state.coins, state.coins);
   assert.equal(result.state.inventory.food['fruit-bowl'], 0);
-  assert.equal(result.state.pet.needs.hunger, 0);
+  assert.equal(result.state.pet.needs.appetite, Math.min(100, state.pet.needs.appetite + 32));
   assert.equal(result.state.pet.diet['fruit-bowl'], 1);
-  assert.equal(result.state.pet.growthSeconds, state.pet.growthSeconds + 60);
+  assert.equal(result.state.pet.growthSeconds, state.pet.growthSeconds);
   assert.equal(result.state.pet.biome, state.pet.biome);
   assert.equal(result.state.pet.seed, state.pet.seed);
   assert.equal(result.state.xp, 5);
@@ -157,26 +176,26 @@ test('feeding lowers hunger, consumes cooked food and records diet without costi
 
 test('a meal is not consumed when hunger is already satisfied or food is unavailable', () => {
   const state = young();
-  state.pet.needs.hunger = 0;
+  state.pet.needs.appetite = 100;
   const full = applyCare(state, 'feed', state.lastUpdated);
   assert.equal(full.success, false);
   assert.equal(full.state.inventory.food['fruit-bowl'], 1);
-  state.pet.needs.hunger = 90;
+  state.pet.needs.appetite = 10;
   state.inventory.food['fruit-bowl'] = 0;
   const missing = applyCare(state, 'feed', state.lastUpdated);
   assert.equal(missing.success, false);
-  assert.equal(missing.state.pet.needs.hunger, 90);
+  assert.equal(missing.state.pet.needs.appetite, 10);
   assert.equal(missing.state.pet.diet['fruit-bowl'], 0);
 });
 
-test('care remains bounded and grants growth without mutating the original state', () => {
+test('care remains bounded without skipping real growth or mutating the original state', () => {
   const state = young();
   state.pet.needs.hygiene = 97;
   const before = serializeSave(state);
   const result = applyCare(state, 'clean', state.lastUpdated);
   assert.equal(result.success, true);
   assert.equal(result.state.pet.needs.hygiene, 100);
-  assert.equal(result.state.pet.growthSeconds, state.pet.growthSeconds + 20);
+  assert.equal(result.state.pet.growthSeconds, state.pet.growthSeconds);
   assert.equal(serializeSave(state), before);
   assert.equal(applyCare(result.state, 'clean', state.lastUpdated).success, false);
 });
@@ -314,7 +333,7 @@ test('born companions interact in their shared biome while eggs and absent frien
   let state = releaseAdult(adult(), NOW + ADULT_SECONDS * 1000).state;
   const friendId = state.freePets[0].id;
   assert.equal(interactPets(state, friendId, state.lastUpdated).success, false);
-  state = advanceTime(state, state.lastUpdated + 60_000);
+  state = advanceTime(state, state.lastUpdated + LIFECYCLE.eggSeconds * 1000);
   state.pet.needs.joy = 40;
   state.freePets[0].needs.joy = 40;
   const before = serializeSave(state);
@@ -328,7 +347,7 @@ test('born companions interact in their shared biome while eggs and absent frien
   assert.equal(interactPets(state, 'missing', state.lastUpdated).success, false);
 });
 
-test('v1 saves migrate without losing identity, achievements or currency and invert hunger once', () => {
+test('v1 saves migrate without losing identity, achievements, points or original satiety', () => {
   const legacy = {
     version: 1,
     pet: {
@@ -348,12 +367,12 @@ test('v1 saves migrate without losing identity, achievements or currency and inv
   };
   const raw = JSON.stringify(legacy);
   const next = parseSave(raw, NOW)!;
-  assert.equal(next.version, 2);
+  assert.equal(next.version, 3);
   assert.equal(next.pet.id, legacy.pet.id);
   assert.equal(next.pet.name, 'Luna');
   assert.equal(next.pet.stage, 'adult');
   assert.equal(next.pet.growthSeconds, ADULT_SECONDS);
-  assert.equal(next.pet.needs.hunger, 22);
+  assert.equal(next.pet.needs.appetite, 78);
   assert.equal(next.pet.biome, 'coast');
   assert.equal(next.currentBiome, 'coast');
   assert.equal(next.coins, 123);
@@ -371,7 +390,7 @@ test('save validation rejects unsupported, inconsistent or corrupt nested data',
   assert.equal(parseSave('[]', NOW), null);
   const mutations: ((state: any) => void)[] = [
     (state) => {
-      state.version = 3;
+      state.version = 4;
     },
     (state) => {
       state.pet.stage = 'young';
@@ -380,7 +399,7 @@ test('save validation rejects unsupported, inconsistent or corrupt nested data',
       state.pet.growthSeconds = -1;
     },
     (state) => {
-      state.pet.needs.hunger = 101;
+      state.pet.needs.appetite = 101;
     },
     (state) => {
       state.pet.needs = null;
@@ -471,7 +490,7 @@ test('restoration reconciles time once and discards unknown properties', () => {
   const state = young();
   const raw = JSON.stringify({ ...state, unexpected: 'ignore me' });
   const restored = parseSave(raw, state.lastUpdated + HOUR)!;
-  assert.equal(restored.pet.needs.hunger, 35);
+  assert.ok(Math.abs(restored.pet.needs.appetite - (state.pet.needs.appetite - 0.8)) < 1e-9);
   assert.equal(restored.lastUpdated, state.lastUpdated + HOUR);
   assert.equal('unexpected' in restored, false);
   assert.deepEqual(parseSave(serializeSave(restored), restored.lastUpdated), restored);
@@ -493,14 +512,14 @@ test('minigame records preserve real scores while local rewards remain bounded',
   assert.equal(parseSave(serializeSave(result.state), state.lastUpdated)?.miniGameBest, 125);
 });
 
-test('experience, hunger mood and bounded renaming retain their semantics', () => {
+test('experience, appetite mood and bounded renaming retain their semantics', () => {
   const state = young();
   state.xp = 95;
   assert.equal(applyCare(state, 'clean', state.lastUpdated).state.level, 2);
   assert.deepEqual(getLevelProgress(state), { current: 95, required: 100, percent: 95 });
-  state.pet.needs = { hunger: 99, energy: 90, hygiene: 90, joy: 90 };
+  state.pet.needs = { appetite: 1, energy: 90, hygiene: 90, joy: 90 };
   assert.equal(getMood(state), 'Tiene hambre');
-  state.pet.needs.hunger = 0;
+  state.pet.needs.appetite = 100;
   assert.equal(getMood(state), 'Radiante');
   assert.equal(getMood(createGame(NOW)), 'Incubando');
   assert.equal(renamePet(state, '  Luna   Azul ').pet.name, 'Luna Azul');
@@ -570,7 +589,7 @@ test('all nine first-visit choices create the selected egg in its chosen birth b
   for (const egg of STARTER_EGGS) {
     for (const biome of BIOMES) {
       const state = createStarterGame(egg.id, biome.id, NOW);
-      assert.equal(state.version, 2);
+      assert.equal(state.version, 3);
       assert.equal(state.pet.stage, 'egg');
       assert.equal(state.pet.growthSeconds, 0);
       assert.equal(state.lastUpdated, NOW);
@@ -659,5 +678,156 @@ test('starter choices preserve the same care resources and progression as ordina
     const played = rewardMiniGame(fed.state, 2, fed.state.lastUpdated);
     assert.equal(played.reward, 7);
     assert.equal(played.state.coins, 87);
+  }
+});
+
+test('baby, young and adult needs decay gently at their own stage rate', () => {
+  const losses = [baby(), young(), adult()].map((state) => {
+    state.pet.needs = { appetite: 90, energy: 90, hygiene: 90, joy: 90 };
+    const after = advanceTime(state, state.lastUpdated + HOUR);
+    return 90 - after.pet.needs.appetite;
+  });
+  assert.ok(Math.abs(losses[0] - 0.6) < 1e-9);
+  assert.ok(Math.abs(losses[1] - 0.8) < 1e-9);
+  assert.ok(Math.abs(losses[2] - 0.45) < 1e-9);
+  assert.ok(losses.every((loss) => loss < 1));
+});
+
+test('need deterioration integrates the exact time spent on either side of a stage boundary', () => {
+  for (const [age, stage, expectedLoss] of [
+    [LIFECYCLE.eggSeconds - 3600, 'egg', 0.6],
+    [YOUNG_SECONDS - 3600, 'baby', 1.4],
+    [ADULT_SECONDS - 3600, 'young', 1.25],
+  ] as const) {
+    const state = createGame(NOW);
+    state.pet.stage = stage;
+    state.pet.growthSeconds = age;
+    state.pet.needs = { appetite: 90, energy: 90, hygiene: 90, joy: 90 };
+    const after = advanceTime(state, NOW + 2 * HOUR);
+    assert.ok(Math.abs(after.pet.needs.appetite - (90 - expectedLoss)) < 1e-9);
+    const split = advanceTime(advanceTime(state, NOW + HOUR), NOW + 2 * HOUR);
+    assert.deepEqual(split, after);
+  }
+});
+
+test('born pets accept endless affection at full joy without increasing bond or progression', () => {
+  for (const initial of [baby(), young(), adult()]) {
+    initial.pet.needs.joy = 100;
+    const before = serializeSave(initial);
+    let state = initial;
+    for (let index = 0; index < 100; index++) {
+      const result = applyCare(state, 'pet', state.lastUpdated);
+      assert.equal(result.success, true);
+      state = result.state;
+    }
+    assert.equal(serializeSave(state), before);
+    assert.equal(serializeSave(initial), before);
+  }
+});
+
+test('food, expeditions and minigames never shorten the real lifecycle', () => {
+  const state = baby();
+  const fed = applyCare(state, 'feed', state.lastUpdated).state;
+  assert.equal(fed.pet.growthSeconds, state.pet.growthSeconds);
+  const played = rewardMiniGame(fed, 100, fed.lastUpdated).state;
+  assert.equal(played.pet.growthSeconds, state.pet.growthSeconds);
+  const expedition = startExpedition(played, [], played.lastUpdated).state;
+  const completed = completeExpedition(expedition, expedition.expedition!.endsAt).state;
+  assert.equal(completed.pet.growthSeconds, state.pet.growthSeconds + EXPEDITION_SECONDS);
+  assert.equal(rewardMiniGame(createGame(NOW), 100, NOW).reward, 0);
+});
+
+test('v2 migration keeps each earned stage, relative growth, appetite and pet identity', () => {
+  for (const [oldAge, stage, newAge] of [
+    [30, 'egg', LIFECYCLE.eggSeconds / 2],
+    [60, 'young', YOUNG_SECONDS],
+    [360, 'young', YOUNG_SECONDS + LIFECYCLE.youngSeconds / 2],
+    [660, 'adult', ADULT_SECONDS],
+    [700, 'adult', ADULT_SECONDS + 40],
+  ] as const) {
+    const current = createGame(NOW);
+    const old = {
+      ...current,
+      version: 2,
+      pet: {
+        ...current.pet,
+        stage,
+        growthSeconds: oldAge,
+        needs: { hunger: 73, energy: 84, hygiene: 73, joy: 88 },
+      },
+    };
+    delete (old as any).decorations;
+    const migrated = parseSave(JSON.stringify(old), NOW)!;
+    assert.ok(migrated);
+    assert.equal(migrated.version, 3);
+    assert.equal(migrated.pet.id, current.pet.id);
+    assert.equal(migrated.pet.seed, current.pet.seed);
+    assert.equal(migrated.pet.stage, stage);
+    assert.equal(migrated.pet.growthSeconds, newAge);
+    assert.equal(migrated.pet.needs.appetite, 27);
+    assert.deepEqual(migrated.decorations, []);
+    assert.deepEqual(parseSave(serializeSave(migrated), NOW), migrated);
+  }
+});
+
+test('v2 migration retains free adults and in-flight expeditions without altering rewards', () => {
+  const current = startExpedition(collection(2), [], NOW + ADULT_SECONDS * 4000).state;
+  const oldPet = (pet: typeof current.pet) => ({
+    ...pet,
+    stage: 'adult',
+    growthSeconds: 700,
+    needs: { hunger: 35, energy: pet.needs.energy, hygiene: pet.needs.hygiene, joy: pet.needs.joy },
+  });
+  const old = {
+    ...current,
+    version: 2,
+    pet: oldPet(current.pet),
+    freePets: current.freePets.map((pet) => ({
+      ...oldPet(pet),
+      habitatBiome: pet.habitatBiome,
+      releasedAt: pet.releasedAt,
+    })),
+  };
+  delete (old as any).decorations;
+  const migrated = parseSave(JSON.stringify(old), current.lastUpdated)!;
+  assert.ok(migrated);
+  assert.deepEqual(migrated.expedition, current.expedition);
+  assert.deepEqual(
+    migrated.freePets.map((pet) => pet.id),
+    current.freePets.map((pet) => pet.id),
+  );
+  assert.ok(migrated.freePets.every((pet) => pet.stage === 'adult' && pet.needs.appetite === 65));
+  (old.pet as any).stage = 'young';
+  assert.equal(parseSave(JSON.stringify(old), current.lastUpdated), null);
+});
+
+test('decoration purchases spend points atomically, survive saving and reject duplicates', () => {
+  const state = createGame(NOW);
+  const item = DECORATIONS.find((item) => item.id === 'lantern')!;
+  state.coins = item.price;
+  const before = serializeSave(state);
+  const bought = purchaseDecoration(state, item.id, NOW);
+  assert.equal(bought.success, true);
+  assert.equal(bought.state.coins, 0);
+  assert.deepEqual(bought.state.decorations, ['lantern']);
+  assert.deepEqual(state.decorations, []);
+  assert.equal(serializeSave(state), before);
+  assert.deepEqual(parseSave(serializeSave(bought.state), NOW), bought.state);
+  for (const id of ['lantern', 'arch', '__proto__'] as const) {
+    const rejected = purchaseDecoration(
+      bought.state,
+      id as Parameters<typeof purchaseDecoration>[1],
+      NOW,
+    );
+    assert.equal(rejected.success, false);
+    assert.deepEqual(rejected.state, bought.state);
+  }
+});
+
+test('decoration saves reject unknown, duplicated or malformed ownership', () => {
+  for (const decorations of [null, ['unknown'], ['lantern', 'lantern'], {}, 'lantern']) {
+    const state = createGame(NOW);
+    (state as any).decorations = decorations;
+    assert.equal(parseSave(serializeSave(state), NOW), null);
   }
 });

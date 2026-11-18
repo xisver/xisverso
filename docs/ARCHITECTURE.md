@@ -2,76 +2,94 @@
 
 ## Mundo, simulación e interfaz
 
-El refugio Canvas 2D es la pantalla principal. La interfaz HTML añade herramientas, botones accesibles que siguen a la mascota y diálogos para crecimiento, viajes, cocina, colección y expediciones.
+El refugio Canvas 2D es la pantalla principal. La interfaz HTML añade herramientas, controles accesibles que siguen a la mascota y diálogos para crecimiento, viajes, cocina, colección, juegos, decoraciones y visitas.
 
-- `src/domain/game.ts`: reglas puras de cuidado, ciclo de vida, inventario, exploración, cocina, convivencia local y migración.
-- `src/domain/game.test.ts`: invariantes, límites, inmutabilidad y casos de persistencia.
-- `src/render/scene.ts`: dibujo procedural, etapas visuales, paseo y residentes del bioma.
-- `src/main.ts`: entrada de ratón/táctil/teclado, diálogos, guardado y coordinación de actividades.
-- `src/style.css`: presentación del mundo, herramientas, luciérnagas y diálogos adaptables.
+- `src/domain/game.ts`: reglas puras de cuidado, ciclo de vida, inventario, expediciones, cocina, compras y migración.
+- `src/domain/game.test.ts`: invariantes, límites, inmutabilidad y persistencia.
+- `src/render/scene.ts`: dibujo procedural, etapas, profundidad, paseo, decoraciones y apariciones de residentes.
+- `src/minigames.ts`: seis actividades con movimiento de la mascota y condiciones propias de puntuación.
+- `src/audio.ts`: música procedural por bioma, efectos, mezcla y preferencias locales.
+- `src/social/firebase.ts`: conexión voluntaria, publicación de vistas y visitas por código.
+- `src/social/firebase.test.ts`: validación de datos compartidos y aislamiento de información local.
+- `src/main.ts`: entradas, diálogos, guardado y coordinación de actividades.
+- `src/style.css`: presentación adaptable y alternativas táctiles y de teclado.
 - `tests/game.spec.ts`: recorridos con Chrome aislado y sin ventana.
-- `scripts/check-pages.mjs`: comprobación de los recursos y el guardado del juego compilado bajo `/xisverso/`.
+- `scripts/check-pages.mjs`: recursos y persistencia de la compilación bajo `/xisverso/`.
+- `scripts/check-firebase-live.mjs`: comprobación explícita de publicación, visita, retirada y limpieza contra el proyecto real.
+- `scripts/test-firebase-rules.mjs`: comprobaciones de seguridad contra el emulador oficial de Firestore.
+- `firestore.rules`: propiedad, validación y acceso por código a las vistas compartidas.
 
-La escena comunica interacciones; no decide recursos ni cambia necesidades. Cada operación del dominio produce un estado nuevo y el coordinador lo guarda antes de actualizar la presentación.
+La escena comunica interacciones; no decide recursos ni cambia necesidades. El dominio devuelve un estado nuevo. La interfaz persiste ese resultado y actualiza la presentación. Firebase no forma parte de la simulación local.
 
-## Primera entrada
+## Primera entrada e identidad
 
-Si no hay una partida v2 válida ni un respaldo v1 recuperable, la interfaz abre una bienvenida modal para escoger un patrón de huevo y el bioma de crianza. El borrador es solo una vista previa: no se guarda ni avanza la incubación, incluso si el usuario espera o recarga antes de confirmar. Los guardados válidos omiten esta pantalla.
+Si no hay una partida v3 válida ni respaldos v2 o v1 recuperables, la interfaz abre la bienvenida. El borrador de huevo y bioma no se guarda ni avanza antes de confirmar. Los guardados válidos omiten esta pantalla. Al confirmar se vuelve a comprobar si otra pestaña ya empezó una partida para conservar esa historia.
 
-`createStarterGame` construye la partida inicial elegida. Los patrones Moteado, Rayado y Estelar se codifican de manera estable en la semilla; el origen sigue siendo `pet.biome` y la ubicación inicial `currentBiome`. Se conserva el esquema v2 y no se modifica el comportamiento de la migración ni de los huevos que aparecen al liberar adultos.
+`createStarterGame` codifica de forma estable el patrón Moteado, Rayado o Estelar en la semilla. `pet.biome` es el origen fijo de los rasgos procedurales; `currentBiome` indica el escenario visitado. Las mascotas libres añaden `habitatBiome`, el lugar donde viven desde que se liberaron. Viajar no modifica identidad, semilla ni origen.
 
-Al confirmar se fija el inicio de la crianza y se guarda la elección. Si otra pestaña ya inició una partida mientras esta seguía en la bienvenida, debe retomarse ese guardado y cerrarse el selector para evitar reemplazar la historia creada.
+## Etapas y reloj
 
-## Identidad, etapa y lugar
+La etapa se deriva de `growthSeconds`: huevo durante 18 000 segundos, bebé durante los siguientes 72 000 y joven durante los siguientes 259 200. La etapa adulta comienza a las 97 horas acumuladas. `getLifeProgress` expresa el progreso relativo, el tiempo restante y la siguiente etapa.
 
-La mascota activa conserva ID, nombre, semilla, bioma de origen, necesidades, vínculo, edad efectiva de crecimiento e historial de recetas. La etapa se deriva del crecimiento: huevo, joven o adulto. La incubación dura 60 segundos y la etapa joven otros 600 segundos efectivos. Dar calor al huevo añade 10 segundos de progreso; los cuidados y las recetas añaden crecimiento después de nacer. La representación cambia con la etapa, no por visitar otro lugar.
+El crecimiento usa todo el tiempo real transcurrido, también con el juego cerrado. Comida, cuidados y juegos no añaden segundos de crecimiento. Las caricias siempre se aceptan, incluso con el ánimo lleno, y no producen vínculo, XP ni progreso adicional. Los relojes atrasados o inválidos no rejuvenecen ni restauran necesidades.
 
-`pet.biome` es el **origen fijo** que determina rasgos procedurales. `currentBiome` es el escenario visitado. Las mascotas libres guardan además `habitatBiome`, el lugar donde viven desde que se liberaron. Separar estos valores evita transformar una mascota cuando el jugador viaja.
+Al liberar un adulto se conserva en `freePets` y se crea un huevo con una identidad nueva en el bioma actual. El dominio rechaza liberar etapas anteriores, duplicar adultos o liberar mientras haya una expedición pendiente de liquidar.
 
-Al liberar un adulto se conserva en `freePets` con la misma identidad y se crea un huevo con nueva identidad en el bioma actual. El dominio rechaza liberar un huevo o joven, duplicar un adulto y liberar mientras una expedición requiere liquidación.
+## Necesidades, alimentación y puntos
 
-La colección contiene mascotas del mismo jugador. Los residentes presentes pueden aparecer en la escena e interactuar con el compañero nacido. Esto no representa usuarios remotos ni una conexión multijugador.
+Todas las necesidades están entre 0 y 100 y expresan bienestar. `needs.appetite` vale 100 cuando la mascota está llena y 0 cuando tiene mucha hambre; comer lo aumenta. Energía, higiene y ánimo también empeoran al bajar.
 
-## Necesidades y alimentación
+El deterioro es lento y depende del bioma y de la etapa. Se integra el tiempo efectivo a cada lado de una transición de etapa. Una ausencia aplica como máximo ocho horas despierto de deterioro, aunque la edad continúa avanzando durante toda la ausencia. Los huevos no sufren ese deterioro y no hay muerte permanente.
 
-Todas las necesidades están entre 0 y 100. Hambre aumenta con el tiempo y comer la reduce; energía, higiene y ánimo empeoran al bajar. La lógica de estado de ánimo, los colores y las descripciones deben respetar esta diferencia.
+Cocinar verifica todos los ingredientes y los consume de manera atómica. Alimentar consume una porción de la receta seleccionada y la registra en `pet.diet`; elegir herramienta o alimento no consume recursos. El botón Alimentar despliega arriba las acciones Cocinar y Elegir alimento. La dieta sigue disponible para un futuro diseño de evoluciones alimentarias.
 
-La mochila contiene materiales y porciones de recetas conocidas. Cocinar comprueba todos los ingredientes y los consume de manera atómica; una receta incompleta no quita materiales. Alimentar consume una porción seleccionada y registra la receta en `pet.diet`. La selección de herramienta no gasta recursos.
-
-El historial de dieta se conserva para un futuro diseño de evoluciones alimentarias. En esta versión no determina una rama de evolución ni modifica la apariencia.
+`coins` representa los puntos locales. Los minijuegos los entregan al terminar; `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
 
 ## Exploraciones persistentes
 
-Una expedición guarda ID, bioma de salida, hora inicial/final, hasta tres acompañantes y sus materiales previstos. Los acompañantes deben ser adultos libres reales, sin duplicados. La cantidad de materiales aumenta con el grupo.
+Una expedición conserva ID, bioma de salida, horas inicial y final, hasta tres adultos libres diferentes y sus materiales previstos. La recompensa y el grupo se fijan al salir. Viajar o recargar no cambia esos datos ni reinicia el reloj. Solo se reclama después de terminar y una sola vez.
 
-El bioma y la recompensa se fijan al iniciar. Viajar o recargar mientras transcurre la actividad no cambia esos datos ni reinicia el reloj. La recompensa solo se reclama después de terminar y se liquida una vez; comenzar una segunda salida sin cerrar la primera se rechaza.
-
-Se permite explorar mientras el compañero está en el huevo: el jugador puede reunir materiales antes de que nazca. Las expediciones son actividades locales, no resultados verificados por un servidor.
+Se permite explorar con un huevo para reunir ingredientes antes de que nazca. Las expediciones y su economía pertenecen a la partida local y no son resultados validados por un servidor.
 
 ## Guardados y migración
 
-La clave actual es `xisverso.save.v2`, con esquema `version: 2`. La aplicación busca un v2 válido. Si falta o está dañado, intenta recuperar un respaldo v1 válido y lo migra; el respaldo v1 se conserva sin modificar. Migrar convierte el antiguo valor de saciedad en hambre (`100 - valor anterior`), conserva la mascota previa como adulta y mantiene el progreso anterior.
+La clave actual es `xisverso.save.v3`, con `version: 3`. La recuperación busca v3, después v2 y finalmente v1, conservando los respaldos anteriores.
 
-La validación comprueba estructuras, valores finitos, límites, IDs únicos, recetas, inventario y expediciones. Un estado inválido se rechaza sin aceptar propiedades arbitrarias.
+- v2: `100 - hunger` se convierte en Apetito. Se preservan las etapas alcanzadas y el progreso relativo dentro de ellas; un joven sigue siendo joven y un adulto sigue siendo adulto. Se mantienen adultos libres, inventario y expediciones legítimas.
+- v1: el antiguo campo `hunger` representaba saciedad y se conserva como Apetito. La mascota previa permanece adulta y mantiene identidad, recursos y logros.
 
-El tiempo se reconcilia al volver y al ejecutar acciones. No se aplican intervalos negativos y se limita la ausencia que modifica el cuidado; no hay muerte permanente. Los ritmos del prototipo son configurables y no constituyen fechas de juego definitivas.
+La validación comprueba estructuras, números finitos, límites, IDs únicos, coherencia entre etapa y edad, recetas, inventario, expediciones y decoraciones. Descarta propiedades desconocidas y rechaza estados inconsistentes.
 
-`localStorage` puede estar bloqueado, llenarse o borrarse. Un fallo mantiene jugable la sesión e informa de que no se guardará. La sincronización entre pestañas escucha `storage` y reconcilia antes de operar; no equivale a transacciones ni a sincronización entre dispositivos. Otro origen web dispone de otro guardado.
+`localStorage` puede estar bloqueado, llenarse o borrarse. La sesión debe seguir jugable si falla una escritura, sin sustituir cambios en memoria por una copia anterior del mismo guardado. La sincronización entre pestañas utiliza `storage` y reconciliación antes de operar; no equivale a transacciones ni a sincronización entre dispositivos. Otro origen web conserva otra partida.
 
-## Dibujo, gestos y accesibilidad
+## Dibujo, profundidad y accesibilidad
 
-Las etapas, los residentes, los paisajes y los efectos se dibujan mediante formas y curvas. El origen controla las paletas de las mascotas; el lugar actual controla el entorno. La costa utiliza vegetación costera y la tundra conserva sus propios elementos.
+Huevos, criaturas, residentes, decoraciones y paisajes se construyen con formas y curvas. La semilla y el origen fijan la paleta; la etapa determina la estructura. El bebé es una forma redonda o flotante con ojos, sin extremidades; el joven añade rasgos y extremidades pequeñas; el adulto tiene su estructura completa.
 
-Las posiciones se expresan normalizadas respecto al lienzo, con márgenes para HUD y herramientas. El huevo no camina; jóvenes y adultos pueden seguir un destino. La escena respeta el movimiento reducido y pausa trabajo cuando la página está oculta.
+La mascota ocupa menos pantalla. Su punto de apoyo se expresa en coordenadas normalizadas del suelo y su escala cambia con la profundidad. Sombras, criaturas y objetos se ordenan según su posición en el terreno. `getPetBounds` expone el rectángulo en píxeles CSS para mantener alineados el control accesible y las interacciones por arrastre.
 
-El botón HTML de la mascota permite activar con teclado el mismo cuidado que un toque. La selección de herramientas tiene nombre accesible y estado; los diálogos tienen título, cierre y Escape. En móvil siempre existe la alternativa de seleccionar y tocar sin arrastrar.
+Las mascotas libres siguen en la colección y en las expediciones, pero solo aparecen ocasionalmente en su bioma. Las ventanas deterministas son breves, de hasta 24 segundos en ciclos de 180 segundos; el renderer limita cuántas se muestran a la vez. Una colección local no representa otros usuarios conectados.
 
-## Luciérnagas
+El huevo no camina; bebés, jóvenes y adultos pueden seguir un destino. El botón HTML de la mascota permite el mismo cuidado por teclado que por toque. Las herramientas exponen nombre y selección, y los diálogos tienen título, cierre y Escape. La escena respeta movimiento reducido y pausa la animación al ocultar la página.
 
-El minijuego conserva su sesión de 20 segundos. Los botones y su brillo deben verse sobre el campo nocturno y mantener una superficie táctil suficiente. Al finalizar se entrega una sola recompensa; salir antes no entrega premios. La visibilidad gráfica se comprueba además de los cambios de contador.
+## Seis minijuegos
 
-## Evolución al modo social
+Las sesiones duran 20 segundos. Luciérnagas en compañía exige que la mascota llegue a la luz; Lluvia de frutas usa la posición de la mascota para recoger; Salta los charcos comprueba el salto; Baile del bosque comprueba dirección y compás; Sendero de recuerdos comprueba una secuencia que la mascota recorre; Pelota al claro usa contacto y empuje hacia una meta.
 
-Las cuentas, visitas entre usuarios, salas privadas y minijuegos multijugador siguen pendientes. Un servidor deberá autenticar propiedad, inventario y resultados; cada premio tendrá un identificador idempotente. El estado local no se importará como prueba fiable de recursos.
+La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola vez al terminar. Salir antes cancela la actividad sin recompensa. Un huevo espera a nacer para jugar. Cada actividad mantiene controles táctiles y alternativas de teclado; no se valida una recompensa por un simple cambio de contador visual.
 
-Primero se validarán cuentas y visitas asincrónicas; después encuentros en tiempo real para grupos pequeños, con permisos, reconexión, bloqueo y reporte.
+## Sonido
+
+Web Audio genera notas, acordes y efectos propios sin archivos externos. El contexto se inicia tras un gesto del usuario. Música y efectos tienen activación y volumen independientes; las preferencias usan `xisverso.audio.v1`. El bioma selecciona la paleta musical. Ocultar la página suspende el contexto y la programación de notas.
+
+## Visitas opcionales con Firebase
+
+El módulo se carga sin iniciar tráfico remoto. Una acción del jugador conecta una identidad anónima persistente y Firestore Lite. Se publica manualmente una vista mínima: versión, nombre del refugio, bioma, apariencia de la mascota, decoraciones y fecha. No se sube el guardado, las necesidades, el inventario ni los puntos.
+
+El código compartido identifica un documento. Las visitas usan lecturas puntuales, sin directorio ni listeners permanentes. Solo el propietario puede publicar, actualizar o eliminar su vista; las reglas deniegan listados y validan campos, tipos, tamaños e IDs. El dueño puede retirar la publicación sin borrar su partida local.
+
+La conexión local utiliza el proyecto `xisverso-xissoft-20261117`, con aplicación web registrada y Auth anónima configurada. La base `(default)` es Firestore Standard con cuota gratuita en `nam5`; la facturación está desactivada. Las reglas superaron 74 comprobaciones con el emulador oficial mediante `npm.cmd run test:firebase-rules`, que requiere Java 21 en `PATH` y utiliza `demo-xisverso` sin cuota remota.
+
+`npm.cmd run check:firebase` aprobó el recorrido con dos sesiones anónimas contra el proyecto real: publicación, visita desde otra sesión sin modificar identidad, inventario ni puntos del visitante, retirada que impide una nueva visita y limpieza de las vistas e identidades temporales. Consume cuota real y se ejecuta expresamente, separado de las pruebas locales. El cliente nuevo continúa sin publicar y las futuras compilaciones de Pages deben recibir su configuración pública. Consulta [FIREBASE.md](FIREBASE.md).
+
+Cuentas recuperables, sincronización de partidas, convivencia en vivo y minijuegos compartidos quedan pendientes. Cualquier economía remota futura deberá validar propiedad y resultados en servidor, sin aceptar el estado local como prueba de recursos legítimos.

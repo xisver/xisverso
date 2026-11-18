@@ -1,11 +1,12 @@
 /** Pure local simulation. Rendering and persistence adapters live outside this module. */
 export type BiomeId = 'forest' | 'coast' | 'tundra';
-export type Need = 'hunger' | 'energy' | 'hygiene' | 'joy';
+export type Need = 'appetite' | 'energy' | 'hygiene' | 'joy';
 export type Action = 'feed' | 'clean' | 'rest' | 'pet';
-export type PetStage = 'egg' | 'young' | 'adult';
+export type PetStage = 'egg' | 'baby' | 'young' | 'adult';
 export type MaterialId = 'berries' | 'grain' | 'kelp' | 'root' | 'herb';
 export type RecipeId = 'fruit-bowl' | 'sea-soup' | 'root-stew';
 export type StarterEggId = 'speckled' | 'striped' | 'starry';
+export type DecorationId = 'lantern' | 'flowers' | 'fountain' | 'bench' | 'mushrooms' | 'arch';
 
 export interface StarterEggDefinition {
   id: StarterEggId;
@@ -40,7 +41,7 @@ export interface Expedition {
   rewards: Record<MaterialId, number>;
 }
 export interface GameState {
-  version: 2;
+  version: 3;
   pet: Pet;
   currentBiome: BiomeId;
   freePets: FreePet[];
@@ -53,6 +54,7 @@ export interface GameState {
   lastUpdated: number;
   activities: number;
   miniGameBest: number;
+  decorations: DecorationId[];
 }
 export type State = GameState;
 export interface CareResult {
@@ -81,6 +83,50 @@ export interface RecipeDefinition {
   hungerRelief: number;
   growthBonus: number;
 }
+export interface DecorationDefinition {
+  id: DecorationId;
+  name: string;
+  description: string;
+  price: number;
+}
+export const DECORATIONS: readonly DecorationDefinition[] = [
+  {
+    id: 'flowers',
+    name: 'Jardín de flores',
+    description: 'Un rincón lleno de color para explorar.',
+    price: 40,
+  },
+  {
+    id: 'lantern',
+    name: 'Farol cálido',
+    description: 'Una pequeña luz que acompaña el refugio.',
+    price: 60,
+  },
+  {
+    id: 'mushrooms',
+    name: 'Setas luminosas',
+    description: 'Un grupo de setas que brilla con suavidad.',
+    price: 75,
+  },
+  {
+    id: 'bench',
+    name: 'Banco de madera',
+    description: 'Un lugar tranquilo para descansar juntos.',
+    price: 110,
+  },
+  {
+    id: 'fountain',
+    name: 'Fuente del bosque',
+    description: 'Agua y calma para tu pequeño mundo.',
+    price: 180,
+  },
+  {
+    id: 'arch',
+    name: 'Arco de bienvenida',
+    description: 'Una entrada especial para recibir visitas.',
+    price: 240,
+  },
+];
 /** The shell pattern is encoded in the existing seed, so all v2 saves remain compatible. */
 export const STARTER_EGGS: readonly StarterEggDefinition[] = [
   {
@@ -142,7 +188,7 @@ export const RECIPES: readonly RecipeDefinition[] = [
     description: 'Una comida suave y dulce.',
     ingredients: { berries: 2, grain: 1 },
     hungerRelief: 32,
-    growthBonus: 60,
+    growthBonus: 0,
   },
   {
     id: 'sea-soup',
@@ -150,7 +196,7 @@ export const RECIPES: readonly RecipeDefinition[] = [
     description: 'Un caldo de algas y hierbas.',
     ingredients: { kelp: 2, herb: 1 },
     hungerRelief: 44,
-    growthBonus: 60,
+    growthBonus: 0,
   },
   {
     id: 'root-stew',
@@ -158,31 +204,37 @@ export const RECIPES: readonly RecipeDefinition[] = [
     description: 'Una comida cálida de la tundra.',
     ingredients: { root: 2, grain: 1 },
     hungerRelief: 50,
-    growthBonus: 60,
+    growthBonus: 0,
   },
 ];
-export const LIFECYCLE = { eggSeconds: 60, youngSeconds: 600 } as const;
+export const LIFECYCLE = {
+  eggSeconds: 5 * 3600,
+  babySeconds: 20 * 3600,
+  youngSeconds: 3 * 24 * 3600,
+} as const;
 export const EXPEDITION_SECONDS = 20;
 export const MAX_OFFLINE_HOURS = 8;
 export const XP_PER_LEVEL = 100;
 export const CARE_COSTS: Readonly<Record<Action, number>> = { feed: 0, clean: 0, rest: 0, pet: 0 };
-const HOUR = 3_600_000;
 const MAX_COUNTER = 1_000_000_000;
 const MAX_FREE_PETS = 100;
-const ADULT_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.youngSeconds;
-const needIds: readonly Need[] = ['hunger', 'energy', 'hygiene', 'joy'];
+const YOUNG_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds;
+const ADULT_SECONDS = YOUNG_SECONDS + LIFECYCLE.youngSeconds;
+const needIds: readonly Need[] = ['appetite', 'energy', 'hygiene', 'joy'];
 const biomeIds: readonly BiomeId[] = ['forest', 'coast', 'tundra'];
 const materialIds: readonly MaterialId[] = ['berries', 'grain', 'kelp', 'root', 'herb'];
 const recipeIds: readonly RecipeId[] = ['fruit-bowl', 'sea-soup', 'root-stew'];
+const decorationIds = DECORATIONS.map((item) => item.id);
 const decayRates: Record<BiomeId, Record<Need, number>> = {
-  forest: { hunger: 5, energy: 3, hygiene: 3, joy: 3 },
-  coast: { hunger: 5.5, energy: 3.5, hygiene: 4.5, joy: 2.5 },
-  tundra: { hunger: 6, energy: 5.5, hygiene: 2, joy: 3 },
+  forest: { appetite: 1, energy: 0.8, hygiene: 0.6, joy: 0.7 },
+  coast: { appetite: 1.1, energy: 0.9, hygiene: 0.8, joy: 0.6 },
+  tundra: { appetite: 1.2, energy: 1.1, hygiene: 0.5, joy: 0.7 },
 };
+const stageDecay: Record<PetStage, number> = { egg: 0, baby: 0.6, young: 0.8, adult: 0.45 };
 const careDefinitions = {
   clean: { need: 'hygiene' as Need, gain: 32, message: 'Un baño de burbujas. ¡Como nueva!' },
   rest: { need: 'energy' as Need, gain: 30, message: 'Una pequeña siesta para recargar energía.' },
-  pet: { need: 'joy' as Need, gain: 22, message: 'Un mimo que hace crecer su confianza en ti.' },
+  pet: { need: 'joy' as Need, gain: 22, message: 'Un mimo para disfrutar de estar juntos.' },
 };
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const validNumber = (value: unknown, min: number, max: number): value is number =>
@@ -215,6 +267,7 @@ function clone(state: GameState): GameState {
     ...state,
     pet: copyPet(state.pet),
     freePets: state.freePets.map(copyPet),
+    decorations: [...state.decorations],
     inventory: { materials: { ...state.inventory.materials }, food: { ...state.inventory.food } },
     expedition: state.expedition
       ? {
@@ -226,7 +279,9 @@ function clone(state: GameState): GameState {
   };
 }
 function stageFor(seconds: number): PetStage {
-  return seconds < LIFECYCLE.eggSeconds ? 'egg' : seconds < ADULT_SECONDS ? 'young' : 'adult';
+  if (seconds < LIFECYCLE.eggSeconds) return 'egg';
+  if (seconds < YOUNG_SECONDS) return 'baby';
+  return seconds < ADULT_SECONDS ? 'young' : 'adult';
 }
 function grow(pet: Pet, seconds: number): void {
   pet.growthSeconds = clamp(pet.growthSeconds + seconds, 0, MAX_COUNTER);
@@ -245,7 +300,7 @@ function newEgg(now: number, biome: BiomeId, number = 0): Pet {
     biome,
     stage: 'egg',
     growthSeconds: 0,
-    needs: { hunger: 30, energy: 84, hygiene: 73, joy: 88 },
+    needs: { appetite: 70, energy: 84, hygiene: 73, joy: 88 },
     bond: 12,
     diet: emptyFood(),
   };
@@ -253,7 +308,7 @@ function newEgg(now: number, biome: BiomeId, number = 0): Pet {
 export function createGame(now = Date.now()): GameState {
   const timestamp = normalizeNow(now);
   return {
-    version: 2,
+    version: 3,
     pet: newEgg(timestamp, 'forest'),
     currentBiome: 'forest',
     freePets: [],
@@ -269,6 +324,7 @@ export function createGame(now = Date.now()): GameState {
     lastUpdated: timestamp,
     activities: 0,
     miniGameBest: 0,
+    decorations: [],
   };
 }
 /** Resolve the immutable shell style from a valid persisted UInt32 seed. */
@@ -303,20 +359,41 @@ export function createStarterGame(
   };
 }
 function passTime(pet: Pet, biome: BiomeId, seconds: number): void {
-  const awakeSeconds = Math.max(0, seconds - Math.max(0, LIFECYCLE.eggSeconds - pet.growthSeconds));
+  // Age follows the entire absence. Only the first eight waking hours affect care.
+  // Integrating stage boundaries avoids applying an adult rate to a baby's whole absence.
+  let age = pet.growthSeconds;
+  let remaining = seconds;
+  let careBudget = MAX_OFFLINE_HOURS * 3600;
+  while (remaining > 0 && careBudget > 0) {
+    const stage = stageFor(age);
+    const boundary =
+      stage === 'egg'
+        ? LIFECYCLE.eggSeconds
+        : stage === 'baby'
+          ? YOUNG_SECONDS
+          : stage === 'young'
+            ? ADULT_SECONDS
+            : Infinity;
+    const elapsed = Math.min(remaining, boundary - age);
+    if (stage !== 'egg') {
+      const careSeconds = Math.min(elapsed, careBudget);
+      for (const need of needIds)
+        pet.needs[need] = clamp(
+          pet.needs[need] - (careSeconds / 3600) * decayRates[biome][need] * stageDecay[stage],
+        );
+      careBudget -= careSeconds;
+    }
+    remaining -= elapsed;
+    age += elapsed;
+  }
   grow(pet, seconds);
-  for (const need of needIds)
-    pet.needs[need] = clamp(
-      pet.needs[need] +
-        (awakeSeconds / 3600) * decayRates[biome][need] * (need === 'hunger' ? 1 : -1),
-    );
 }
 /** Reconcile time without background services; absence never kills or deletes a pet. */
 export function advanceTime(state: GameState, now = Date.now()): GameState {
   const next = clone(state);
   const timestamp = normalizeNow(now, state.lastUpdated);
   if (timestamp <= state.lastUpdated) return next;
-  const seconds = Math.min((timestamp - state.lastUpdated) / 1000, MAX_OFFLINE_HOURS * 3600);
+  const seconds = (timestamp - state.lastUpdated) / 1000;
   passTime(next.pet, next.currentBiome, seconds);
   for (const pet of next.freePets) passTime(pet, pet.habitatBiome, seconds);
   next.lastUpdated = timestamp;
@@ -333,21 +410,14 @@ export function applyCare(state: GameState, action: Action, now = Date.now()): C
         success: false,
         message: 'Todavía es un huevo. Dale cariño para mantenerlo calentito.',
       };
-    grow(next.pet, 10);
-    next.pet.bond = clamp(next.pet.bond + 1);
-    next.activities = Math.min(MAX_COUNTER, next.activities + 1);
-    grantExperience(next, 2);
     return {
       state: next,
       success: true,
-      message:
-        stageFor(next.pet.growthSeconds) === 'young'
-          ? `¡El huevo se abrió! ${next.pet.name} ya es joven.`
-          : 'Un poquito de calor. ¡El huevo se mueve!',
+      message: 'Un poquito de calor. El huevo nacerá a su propio ritmo.',
     };
   }
   if (action === 'feed') {
-    if (next.pet.needs.hunger <= 2)
+    if (next.pet.needs.appetite >= 98)
       return {
         state: next,
         success: false,
@@ -361,30 +431,33 @@ export function applyCare(state: GameState, action: Action, now = Date.now()): C
         message: 'No queda esa comida preparada. Cocina o elige otra receta en la cocina.',
       };
     next.inventory.food[recipe.id]--;
-    next.pet.needs.hunger = clamp(next.pet.needs.hunger - recipe.hungerRelief);
+    next.pet.needs.appetite = clamp(next.pet.needs.appetite + recipe.hungerRelief);
     next.pet.diet[recipe.id] = Math.min(MAX_COUNTER, next.pet.diet[recipe.id] + 1);
-    grow(next.pet, recipe.growthBonus);
   } else {
     const definition = careDefinitions[action];
     if (!definition)
       return { state: next, success: false, message: 'Ese cuidado todavía no está disponible.' };
-    if (next.pet.needs[definition.need] >= 98)
+    if (action !== 'pet' && next.pet.needs[definition.need] >= 98)
       return {
         state: next,
         success: false,
         message: 'Ya tiene esa necesidad cubierta. Prueba otro cuidado.',
       };
     next.pet.needs[definition.need] = clamp(next.pet.needs[definition.need] + definition.gain);
-    grow(next.pet, 20);
   }
-  next.pet.bond = clamp(next.pet.bond + (action === 'pet' ? 4 : 2));
-  next.activities = Math.min(MAX_COUNTER, next.activities + 1);
-  grantExperience(next, 5);
+  // Affection remains available at full joy, without farming bond or progression.
+  if (action !== 'pet') {
+    next.pet.bond = clamp(next.pet.bond + 2);
+    next.activities = Math.min(MAX_COUNTER, next.activities + 1);
+    grantExperience(next, 5);
+  }
   return {
     state: next,
     success: true,
     message:
-      action === 'feed' ? '¡Qué rico! Su hambre ha bajado.' : careDefinitions[action].message,
+      action === 'feed'
+        ? '¡Qué rico! Su apetito está satisfecho.'
+        : careDefinitions[action].message,
   };
 }
 export function changeBiome(state: GameState, biome: BiomeId, now = Date.now()): GameState {
@@ -474,6 +547,27 @@ export function selectFood(state: GameState, recipeId: RecipeId): GameState {
     next.selectedFood = recipeId;
   return next;
 }
+export function purchaseDecoration(
+  state: GameState,
+  decorationId: DecorationId,
+  now = Date.now(),
+): CareResult {
+  const next = advanceTime(state, now);
+  const decoration = DECORATIONS.find((item) => item.id === decorationId);
+  if (!decoration)
+    return { state: next, success: false, message: 'Esa decoración no está disponible.' };
+  if (next.decorations.includes(decorationId))
+    return { state: next, success: false, message: 'Esta decoración ya forma parte de tu mundo.' };
+  if (next.coins < decoration.price)
+    return {
+      state: next,
+      success: false,
+      message: 'Necesitas más puntos. Juega con tu mascota para conseguirlos.',
+    };
+  next.coins -= decoration.price;
+  next.decorations.push(decorationId);
+  return { state: next, success: true, message: `¡${decoration.name} ya decora tu mundo!` };
+}
 function expeditionRewards(
   biome: BiomeId,
   companions: number,
@@ -561,7 +655,6 @@ export function completeExpedition(
   next.expedition = null;
   next.activities = Math.min(MAX_COUNTER, next.activities + 1);
   grantExperience(next, 10);
-  if (next.pet.stage !== 'egg') grow(next.pet, 45);
   return {
     state: next,
     success: true,
@@ -603,6 +696,7 @@ export function rewardMiniGame(
 ): { state: GameState; reward: number } {
   const next = advanceTime(state, now);
   const settledScore = Number.isFinite(score) ? Math.floor(clamp(score, 0, MAX_COUNTER)) : 0;
+  if (next.pet.stage === 'egg' || settledScore === 0) return { state: next, reward: 0 };
   const reward = settledScore === 0 ? 0 : Math.min(35, 5 + settledScore);
   next.coins = Math.min(MAX_COUNTER, next.coins + reward);
   next.miniGameBest = Math.max(next.miniGameBest, settledScore);
@@ -611,18 +705,17 @@ export function rewardMiniGame(
   next.pet.bond = clamp(next.pet.bond + Math.min(5, settledScore));
   next.activities = Math.min(MAX_COUNTER, next.activities + 1);
   grantExperience(next, Math.min(25, settledScore * 2));
-  if (next.pet.stage !== 'egg') grow(next.pet, Math.min(45, settledScore * 3));
   return { state: next, reward };
 }
 export function getMood(state: GameState): string {
   if (state.pet.stage === 'egg') return 'Incubando';
   const n = state.pet.needs;
   if (n.energy < 30) return 'Con sueño';
-  if (n.hunger > 70) return 'Tiene hambre';
+  if (n.appetite < 30) return 'Tiene hambre';
   if (n.hygiene < 30) return 'Quiere un baño';
   if (n.joy < 30) return 'Busca compañía';
-  if (n.hunger <= 25 && n.energy >= 75 && n.hygiene >= 75 && n.joy >= 75) return 'Radiante';
-  if (n.hunger <= 55 && n.energy >= 45 && n.hygiene >= 45 && n.joy >= 45) return 'A gusto';
+  if (n.appetite >= 75 && n.energy >= 75 && n.hygiene >= 75 && n.joy >= 75) return 'Radiante';
+  if (n.appetite >= 45 && n.energy >= 45 && n.hygiene >= 45 && n.joy >= 45) return 'A gusto';
   return 'Necesita cuidados';
 }
 export function getLifeProgress(pet: Pet): {
@@ -635,14 +728,23 @@ export function getLifeProgress(pet: Pet): {
   if (pet.stage === 'adult')
     return { stage: 'adult', label: 'Adulto', percent: 100, remainingSeconds: 0, nextStage: null };
   const egg = pet.stage === 'egg';
-  const elapsed = egg ? pet.growthSeconds : pet.growthSeconds - LIFECYCLE.eggSeconds;
-  const duration = egg ? LIFECYCLE.eggSeconds : LIFECYCLE.youngSeconds;
+  const baby = pet.stage === 'baby';
+  const elapsed = egg
+    ? pet.growthSeconds
+    : baby
+      ? pet.growthSeconds - LIFECYCLE.eggSeconds
+      : pet.growthSeconds - YOUNG_SECONDS;
+  const duration = egg
+    ? LIFECYCLE.eggSeconds
+    : baby
+      ? LIFECYCLE.babySeconds
+      : LIFECYCLE.youngSeconds;
   return {
     stage: pet.stage,
-    label: egg ? 'Huevo' : 'Joven',
+    label: egg ? 'Huevo' : baby ? 'Bebé' : 'Joven',
     percent: clamp((elapsed / duration) * 100),
     remainingSeconds: Math.max(0, Math.ceil(duration - elapsed)),
-    nextStage: egg ? 'Joven' : 'Adulto',
+    nextStage: egg ? 'Bebé' : baby ? 'Joven' : 'Adulto',
   };
 }
 export function getLevelProgress(state: GameState): {
@@ -664,7 +766,30 @@ function counters<T extends string>(
   if (!record(value) || !ids.every((id) => validInteger(value[id], 0, maximum))) return null;
   return Object.fromEntries(ids.map((id) => [id, value[id]])) as Record<T, number>;
 }
-function parsePet(value: unknown): Pet | null {
+function parsePet(value: unknown, version = 3): Pet | null {
+  if (version === 2) {
+    if (
+      !record(value) ||
+      !record(value.needs) ||
+      !validNumber(value.growthSeconds, 0, MAX_COUNTER) ||
+      !validNumber(value.needs.hunger, 0, 100)
+    )
+      return null;
+    const oldAge = value.growthSeconds;
+    const oldStage = oldAge < 60 ? 'egg' : oldAge < 660 ? 'young' : 'adult';
+    if (value.stage !== oldStage) return null;
+    const age =
+      oldStage === 'egg'
+        ? (oldAge / 60) * LIFECYCLE.eggSeconds
+        : oldStage === 'young'
+          ? YOUNG_SECONDS + ((oldAge - 60) / 600) * LIFECYCLE.youngSeconds
+          : Math.min(MAX_COUNTER, ADULT_SECONDS + oldAge - 660);
+    value = {
+      ...value,
+      growthSeconds: age,
+      needs: { ...value.needs, appetite: 100 - value.needs.hunger },
+    };
+  }
   if (
     !record(value) ||
     typeof value.id !== 'string' ||
@@ -693,7 +818,7 @@ function parsePet(value: unknown): Pet | null {
     stage: value.stage as PetStage,
     growthSeconds: value.growthSeconds,
     needs: {
-      hunger: value.needs.hunger as number,
+      appetite: value.needs.appetite as number,
       energy: value.needs.energy as number,
       hygiene: value.needs.hygiene as number,
       joy: value.needs.joy as number,
@@ -702,14 +827,14 @@ function parsePet(value: unknown): Pet | null {
     diet,
   };
 }
-/** Supports v1 migration without losing identity, currency, experience or achievements. */
+/** v1/v2 migrate once, preserving earned stages, identity, resources and relative growth. */
 export function parseSave(raw: string | null | undefined, now = Date.now()): GameState | null {
   if (typeof raw !== 'string' || raw.length > 524_288) return null;
   try {
     const data: unknown = JSON.parse(raw);
     if (
       !record(data) ||
-      (data.version !== 1 && data.version !== 2) ||
+      (data.version !== 1 && data.version !== 2 && data.version !== 3) ||
       !validInteger(data.coins) ||
       !validInteger(data.xp) ||
       !validInteger(data.level, 1, 10_000_001) ||
@@ -730,12 +855,10 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
         diet: emptyFood(),
         needs: {
           ...data.pet.needs,
-          hunger: validNumber(data.pet.needs.hunger, 0, 100)
-            ? 100 - data.pet.needs.hunger
-            : Number.NaN,
+          appetite: validNumber(data.pet.needs.hunger, 0, 100) ? data.pet.needs.hunger : Number.NaN,
         },
       });
-    } else pet = parsePet(data.pet);
+    } else pet = parsePet(data.pet, data.version);
     if (!pet) return null;
     const defaults = createGame(data.lastUpdated);
     const next: GameState = {
@@ -765,7 +888,7 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
       next.selectedFood = data.selectedFood as RecipeId;
       const ids = new Set([pet.id]);
       for (const value of data.freePets) {
-        const freePet = parsePet(value);
+        const freePet = parsePet(value, data.version);
         if (
           !freePet ||
           freePet.stage !== 'adult' ||
@@ -816,6 +939,16 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
           rewards,
         };
       }
+    }
+    if (data.version === 3) {
+      if (
+        !Array.isArray(data.decorations) ||
+        data.decorations.length > decorationIds.length ||
+        new Set(data.decorations).size !== data.decorations.length ||
+        data.decorations.some((id) => !decorationIds.includes(id as DecorationId))
+      )
+        return null;
+      next.decorations = [...data.decorations] as DecorationId[];
     }
     return advanceTime(next, now);
   } catch {

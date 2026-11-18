@@ -1,23 +1,31 @@
 {
   "name": "xisverso",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Un mundo vivo de mascotas procedurales por XisSoft",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 4173",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --experimental-strip-types --test src/domain/game.test.ts",
+    "test": "node --experimental-strip-types --test src/domain/game.test.ts src/social/firebase.test.ts",
     "test:e2e": "playwright test",
     "format": "prettier --write src tests docs *.json *.ts *.html README.md AGENTS.md .github",
     "build:pages": "tsc --noEmit && vite build --base=/xisverso/",
-    "check:pages": "npm run build:pages && node scripts/check-pages.mjs"
+    "check:pages": "npm run build:pages && node scripts/check-pages.mjs",
+    "check:firebase": "node scripts/check-firebase-live.mjs",
+    "test:firebase-rules": "npx --cache .tools/firebase-cache -y firebase-tools@latest emulators:exec --only auth,firestore --project demo-xisverso \"node scripts/test-firebase-rules.mjs\""
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
     "prettier": "3.10.1",
     "typescript": "7.0.2",
     "vite": "8.3.8"
+  },
+  "dependencies": {
+    "firebase": "^13.4.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.7"
   }
 }

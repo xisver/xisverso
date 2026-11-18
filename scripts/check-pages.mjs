@@ -54,16 +54,16 @@ try {
   });
   await page.goto(origin + prefix);
   await expect(page.locator('#welcome-dialog')).toBeVisible();
-  assert.equal(await page.evaluate(() => localStorage.getItem('xisverso.save.v2')), null);
+  assert.equal(await page.evaluate(() => localStorage.getItem('xisverso.save.v3')), null);
   await page.locator('input[name="starter-egg"][value="starry"]').check();
   await page.locator('input[name="starter-biome"][value="coast"]').check();
   await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
   await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   await expect(page.locator('#pet-name')).toHaveText('Nubi');
   assert.equal((await page.request.get(origin + prefix + 'favicon.svg')).status(), 200);
-  const saveKey = 'xisverso.save.v2';
+  const saveKey = 'xisverso.save.v3';
   const before = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
-  assert.equal(before.version, 2);
+  assert.equal(before.version, 3);
   assert.equal(before.pet.stage, 'egg');
   assert.equal(before.pet.biome, 'coast');
   assert.equal(before.currentBiome, 'coast');
@@ -72,21 +72,24 @@ try {
   const pet = await page.locator('#pet-interact').boundingBox();
   assert.ok(pet);
   await page.mouse.click(pet.x + pet.width / 2, pet.y + pet.height / 2);
-  await expect
-    .poll(async () =>
-      page.evaluate((key) => JSON.parse(localStorage.getItem(key)).pet.growthSeconds, saveKey),
-    )
-    .toBeGreaterThan(before.pet.growthSeconds + 8);
+  await expect(page.locator('#pet-thought')).toContainText('calor');
   const warmed = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
+  assert.equal(warmed.pet.bond, before.pet.bond);
+  assert.ok(warmed.pet.growthSeconds - before.pet.growthSeconds < 5);
+  await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
+  await expect(page.locator('#food-options')).toBeVisible();
+  await page.locator('#food-options').getByRole('button', { name: 'Cocinar', exact: true }).click();
+  await expect(page.locator('#kitchen-dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   const restored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
-  assert.equal(restored.version, 2);
+  assert.equal(restored.version, 3);
   assert.equal(restored.pet.id, before.pet.id);
   assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: JavaScript, CSS, favicon, bienvenida, huevo elegido, bioma, calor y guardado v2 funcionan bajo /xisverso/.',
+    'PAGES_OK: recursos, bienvenida, huevo, bioma, caricias sin acelerar, menú de comida y guardado v3 funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();

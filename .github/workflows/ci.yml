@@ -22,3 +22,5 @@ jobs:
       - run: npm.cmd ci
       - run: npm.cmd test
       - run: npm.cmd run build
+      - run: npm.cmd run test:e2e
+      - run: npm.cmd run check:pages

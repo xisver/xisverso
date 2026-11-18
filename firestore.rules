@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isOwner(code) { return signedIn() && request.auth.uid == code; }
+    function biome(value) { return value in ['forest', 'coast', 'tundra']; }
+    function safeName(value, maximum) {
+      return value is string && value.size() > 0 && value.size() <= maximum
+        && value.matches('^[^<>\\n\\r\\t]+$');
+    }
+    function validPet(pet) {
+      return pet is map
+        && pet.keys().hasAll(['name', 'seed', 'biome', 'stage'])
+        && pet.keys().hasOnly(['name', 'seed', 'biome', 'stage'])
+        && safeName(pet.name, 24)
+        && pet.seed is int && pet.seed >= 0 && pet.seed <= 4294967295
+        && biome(pet.biome)
+        && pet.stage in ['egg', 'baby', 'young', 'adult'];
+    }
+    function validWorld(world) {
+      return world.keys().hasAll(['version', 'name', 'biome', 'pet', 'decorations', 'updatedAt'])
+        && world.keys().hasOnly(['version', 'name', 'biome', 'pet', 'decorations', 'updatedAt'])
+        && world.version == 1
+        && safeName(world.name, 36)
+        && biome(world.biome)
+        && validPet(world.pet)
+        && world.decorations is list && world.decorations.size() <= 6
+        && world.decorations.toSet().size() == world.decorations.size()
+        && world.decorations.hasOnly(['lantern', 'flowers', 'fountain', 'bench', 'mushrooms', 'arch'])
+        && world.updatedAt is timestamp && world.updatedAt == request.time;
+    }
+    match /worlds/{code} {
+      // Exact-code visits only. There is no public directory of users.
+      allow get: if signedIn() && code.matches('^[A-Za-z0-9_-]{20,128}$');
+      allow list: if false;
+      allow create: if isOwner(code) && validWorld(request.resource.data);
+      allow update: if isOwner(code) && validWorld(request.resource.data)
+        && request.time >= resource.data.updatedAt + duration.value(30, 's');
+      allow delete: if isOwner(code);
+    }
+    // Local saves, inventory and rewards have no remotely writable endpoint.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

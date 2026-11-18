@@ -3577,3 +3577,357 @@ dialog h3 {
     margin-top: -10px;
   }
 }
+
+/* Small companions, quiet sound controls and activities in the clearing. */
+.pet-interact {
+  transform: none;
+}
+.speech-bubble {
+  top: max(150px, calc(var(--pet-top, 50vh) - 90px));
+}
+.feed-tool-wrap {
+  position: relative;
+  display: flex;
+}
+.food-options {
+  position: absolute;
+  bottom: calc(100% + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 225px;
+  padding: 12px;
+  border: 2px solid #fffdf2;
+  border-radius: 19px;
+  background: #fffbed;
+  box-shadow: 0 10px 30px #2c493b24;
+  color: #536b52;
+}
+.food-options[hidden] {
+  display: none;
+}
+.food-options strong {
+  display: block;
+  padding: 5px 8px 8px;
+  font-size: 12px;
+}
+.food-options button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  color: #536b52;
+}
+.food-options button:hover,
+.food-options button:focus-visible {
+  background: #e8eddb;
+}
+.food-options .icon {
+  width: 21px;
+  height: 21px;
+}
+.food-options::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: calc(50% - 8px);
+  width: 14px;
+  height: 14px;
+  background: #fffbed;
+  transform: rotate(45deg);
+}
+.audio-dialog label:not(.audio-toggle),
+.friends-dialog label {
+  display: block;
+  margin: 20px 0 8px;
+  color: #526849;
+  font-size: 13px;
+  font-weight: 650;
+}
+.audio-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 8px;
+  color: #526849;
+  font-weight: 650;
+}
+.audio-toggle input {
+  width: 22px;
+  height: 22px;
+  accent-color: #638966;
+}
+.audio-dialog input[type='range'] {
+  width: 100%;
+  accent-color: #638966;
+  margin: 7px 0 15px;
+}
+.audio-dialog .secondary-button {
+  margin-top: 22px;
+}
+.friends-dialog input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cbd5b8;
+  border-radius: 12px;
+  padding: 13px;
+  color: #526849;
+  background: #fffef7;
+  font: inherit;
+}
+.friends-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.friends-dialog form {
+  margin-top: 24px;
+  padding-top: 5px;
+  border-top: 1px solid #dfe4d0;
+}
+.friends-dialog form .primary-button {
+  margin-top: 14px;
+}
+.connection-notice {
+  margin: 18px 0;
+  padding: 13px 16px;
+  background: #edf1e3;
+  border-radius: 13px;
+  font-size: 13px;
+  color: #5f7352;
+  line-height: 1.6;
+}
+.connection-notice:empty {
+  display: none;
+}
+.small-note {
+  font-size: 12px;
+  margin-top: 18px;
+}
+#share-code-panel {
+  margin-top: 20px;
+}
+#share-code-panel button {
+  margin-top: 10px;
+}
+.visit-dialog {
+  width: min(1000px, calc(100% - 24px));
+}
+#visit-scene {
+  display: block;
+  width: 100%;
+  height: min(58vh, 550px);
+  border-radius: 20px;
+  margin-top: 18px;
+}
+.visit-dialog > .primary-button {
+  margin-top: 16px;
+}
+.shop-wallet {
+  color: #8b7846;
+  background: #f5eed4;
+  border-radius: 13px;
+  padding: 14px 18px;
+  margin: 20px 0;
+}
+.shop-wallet strong {
+  font-size: 22px;
+  margin-right: 6px;
+}
+.shop-dialog,
+.games-dialog {
+  width: min(850px, calc(100% - 28px));
+}
+.decoration-list,
+.minigame-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+.decoration-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+  border: 1px solid #dce4ca;
+  border-radius: 19px;
+  background: #fffdf3;
+}
+.decoration-symbol {
+  display: grid;
+  place-items: center;
+  width: 57px;
+  height: 57px;
+  margin-bottom: 14px;
+  border-radius: 17px;
+  background: #e9edda;
+  color: #6a875d;
+  font-size: 34px;
+}
+.decoration-card h3 {
+  color: #51694a;
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.decoration-card p {
+  color: #77846b;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 18px;
+  flex: 1;
+}
+.decoration-card button {
+  width: 100%;
+  padding-inline: 8px;
+  font-size: 11px;
+}
+.minigame-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  padding: 20px;
+  border-radius: 19px;
+  border: 1px solid #d6e0c7;
+  background: #fcfcf1;
+  color: #51694a;
+}
+.minigame-card > span {
+  font-size: 31px;
+  color: #8c9c66;
+}
+.minigame-card strong {
+  font-size: 15px;
+}
+.minigame-card small {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #78866b;
+  flex: 1;
+}
+.minigame-card b {
+  font-size: 11px;
+  margin-top: 7px;
+  color: #62825a;
+}
+.minigame-card:hover:not(:disabled) {
+  border-color: #839f70;
+  background: #f0f4e5;
+}
+.minigame-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.game-field::before,
+.game-field::after {
+  display: none;
+}
+.activity-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.activity-status {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fff8e0;
+  text-shadow: 0 1px 5px #153a44;
+  pointer-events: none;
+}
+.activity-controls {
+  position: absolute;
+  z-index: 4;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+}
+.activity-controls:empty {
+  display: none;
+}
+.activity-controls button {
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid #fff6c999;
+  border-bottom: 3px solid #30524b;
+  border-radius: 13px;
+  background: #fff9dfef;
+  color: #3c6057;
+  font-weight: 700;
+  font-size: 19px;
+}
+.activity-controls button:active {
+  transform: translateY(2px);
+}
+.firefly[data-catching='true'] {
+  outline: 2px dashed #fff4a0;
+  outline-offset: 1px;
+}
+.game-field.finished {
+  height: 100px;
+}
+.game-field.finished .activity-status,
+.game-field.finished .activity-controls,
+.game-field.finished .firefly {
+  display: none;
+}
+@media (max-width: 700px) {
+  .decoration-list,
+  .minigame-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .decoration-card,
+  .minigame-card {
+    padding: 15px 12px;
+  }
+  .minigame-card small {
+    font-size: 11px;
+  }
+  .food-options {
+    left: 30px;
+    width: 210px;
+  }
+  .activity-controls {
+    gap: 6px;
+  }
+  .activity-controls button {
+    min-width: 44px;
+    padding-inline: 12px;
+  }
+  .friends-actions > button {
+    width: 100%;
+  }
+  .game-field {
+    height: 310px;
+  }
+  .game-dialog {
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+  }
+}
+@media (max-width: 380px) {
+  .decoration-list,
+  .minigame-list {
+    grid-template-columns: 1fr;
+  }
+}

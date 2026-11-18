@@ -4,8 +4,9 @@
 - Producto: Xisverso, desarrollado por XisSoft; interfaz y documentación en español.
 - TypeScript con comprobación estricta. La simulación vive en `src/domain/game.ts`; no debe depender del DOM ni del almacenamiento.
 - El arte de `src/render/scene.ts` es procedural Canvas 2D, sin sprites ni modelos externos.
-- La versión inicial es local. No presentar usuarios, visitas o partidas remotas ficticias como funcionalidad real.
+- La partida, el inventario y los puntos son locales. Firebase solo comparte vistas voluntarias del refugio por código; no presentar usuarios, visitas, despliegues o partidas remotas ficticias como funcionalidad real.
 - Las futuras recompensas en línea deben validarse en un servidor. El estado local no es una prueba de recursos legítimos.
-- Mantener guardados versionados, necesidades entre 0 y 100 y ausencia sin muerte permanente.
+- Mantener guardados versionados y migración v1/v2 a v3, necesidades entre 0 y 100 y ausencia sin muerte permanente. Apetito usa 100 para lleno y 0 para mucha hambre.
+- Respetar las etapas huevo (5 horas), bebé (20 horas), joven (3 días) y adulto. La edad usa todo el tiempo real; limitar solo el deterioro por ausencia. Las caricias no añaden vínculo, XP ni crecimiento.
 - Verificación: `npm.cmd test`, `npm.cmd run build`; cambios de interfaz o flujos, `npm.cmd run test:e2e` (Chrome instalado, ejecución sin ventana).
 - No añadir licencias de código abierto, servicios de pago ni despliegues públicos sin instrucciones del propietario.

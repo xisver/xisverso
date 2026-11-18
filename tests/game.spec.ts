@@ -1,15 +1,28 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createGame, type GameState, type MaterialId, type PetStage } from '../src/domain/game';
+import {
+  createGame,
+  LIFECYCLE,
+  type GameState,
+  type MaterialId,
+  type PetStage,
+} from '../src/domain/game';
 
-const SAVE_KEY = 'xisverso.save.v2';
+const SAVE_KEY = 'xisverso.save.v3';
+const V2_KEY = 'xisverso.save.v2';
 const LEGACY_KEY = 'xisverso.save.v1';
+const ADULT_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds + LIFECYCLE.youngSeconds;
 const MATERIAL_IDS: MaterialId[] = ['berries', 'grain', 'kelp', 'root', 'herb'];
 
 function bornState(stage: PetStage = 'adult', freeCount = 0): GameState {
   const state = createGame();
   state.pet.stage = stage;
-  state.pet.growthSeconds = stage === 'egg' ? 0 : stage === 'young' ? 120 : 700;
-  state.pet.needs = { hunger: 55, energy: 64, hygiene: 65, joy: 65 };
+  state.pet.growthSeconds = {
+    egg: 0,
+    baby: LIFECYCLE.eggSeconds + 60,
+    young: LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds + 60,
+    adult: ADULT_SECONDS + 60,
+  }[stage];
+  state.pet.needs = { appetite: 45, energy: 64, hygiene: 65, joy: 65 };
   state.freePets = Array.from({ length: freeCount }, (_, index) => ({
     ...structuredClone(state.pet),
     id: `xis-free-${index + 1}`,
@@ -17,7 +30,7 @@ function bornState(stage: PetStage = 'adult', freeCount = 0): GameState {
     seed: 101 + index,
     biome: (['forest', 'coast', 'tundra'] as const)[index % 3],
     stage: 'adult' as const,
-    growthSeconds: 700,
+    growthSeconds: ADULT_SECONDS + 60,
     habitatBiome: 'forest' as const,
     releasedAt: state.lastUpdated - 1000,
   }));
@@ -56,8 +69,26 @@ async function touchPet(page: Page) {
 }
 
 async function feedPet(page: Page) {
-  await page.getByRole('button', { name: 'Comida', exact: true }).click();
+  await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
+  await page
+    .locator('#food-options')
+    .getByRole('button', { name: 'Elegir alimento', exact: true })
+    .click();
+  await page.locator('#food-choice-list [data-select-food="fruit-bowl"]').click();
   await touchPet(page);
+}
+
+async function openKitchen(page: Page) {
+  await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
+  await page.locator('#food-options').getByRole('button', { name: 'Cocinar', exact: true }).click();
+}
+
+async function openActivity(page: Page, kind: string) {
+  await page.getByRole('button', { name: 'Jugar', exact: true }).click();
+  await expect(page.locator('#games-dialog [data-minigame]')).toHaveCount(6);
+  await page.locator(`[data-minigame="${kind}"]`).click();
+  await expect(page.locator('#game-dialog')).toBeVisible();
+  await expect(page.locator('#game-field canvas')).toHaveAttribute('aria-label', /Nubi participa/);
 }
 
 async function visitBiome(page: Page, biome: 'forest' | 'coast' | 'tundra') {
@@ -70,46 +101,54 @@ async function openCollection(page: Page) {
   await page.getByRole('button', { name: 'Mis mascotas', exact: true }).click();
 }
 
-test('un huevo recibe calor, conserva el crecimiento y nace como joven', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await gotoGame(page);
-  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
-  await expect(page.locator('#pet-name')).toHaveText('Nubi');
-  const initial = await readState(page);
-  await page.getByRole('button', { name: 'Caricias', exact: true }).click();
-  for (let index = 0; index < 3; index++) {
-    await touchPet(page);
-    await page.waitForTimeout(900);
-  }
-  const warmed = await readState(page);
-  expect(warmed.pet.growthSeconds).toBeGreaterThan(initial.pet.growthSeconds + 25);
-  await page.reload();
-  expect((await readState(page)).pet.id).toBe(initial.pet.id);
-  expect((await readState(page)).pet.growthSeconds).toBeGreaterThanOrEqual(
-    warmed.pet.growthSeconds,
-  );
-  for (let index = 0; index < 3; index++) {
-    await touchPet(page);
-    await page.waitForTimeout(900);
-  }
-  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'young');
-  await page.locator('#open-pet').click();
-  await expect(page.locator('#life-label')).toHaveText('Joven');
-  expect(errors).toEqual([]);
-  await page.keyboard.press('Escape');
-  await page.mouse.move(5, 5);
-  await page.screenshot({ path: 'artifacts/xisverso-young.png' });
-});
+for (const [stage, threshold, next, label] of [
+  ['egg', LIFECYCLE.eggSeconds, 'baby', 'Bebé'],
+  ['baby', LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds, 'young', 'Joven'],
+  ['young', ADULT_SECONDS, 'adult', 'Adulto'],
+] as const) {
+  test(`la etapa ${stage} cambia a ${next} por tiempo real y persiste`, async ({ page }) => {
+    const initial = bornState(stage);
+    initial.pet.growthSeconds = threshold - 60;
+    await page.clock.install({ time: new Date(initial.lastUpdated) });
+    await seedState(page, initial);
+    await gotoGame(page);
+    await expect(page.locator('#pet-scene')).toHaveAttribute('data-stage', stage);
+    await page.clock.fastForward(61000);
+    await expect(page.locator('#pet-scene')).toHaveAttribute('data-stage', next);
+    await page.locator('#open-pet').click();
+    await expect(page.locator('#life-label')).toHaveText(label);
+    await page.reload();
+    expect((await readState(page)).pet.stage).toBe(next);
+    expect((await readState(page)).pet.id).toBe(initial.pet.id);
+  });
+}
 
-test('comer reduce Hambre y consume una porción, sin cobrar semillas al elegir la herramienta', async ({
+test('las caricias siguen funcionando con ánimo lleno sin generar vínculo ni crecimiento adicional', async ({
+  page,
+}) => {
+  const initial = bornState('baby');
+  initial.pet.needs.joy = 100;
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await touchPet(page);
+  await page.clock.runFor(900);
+  await touchPet(page);
+  const after = await readState(page);
+  expect(after.pet.bond).toBe(initial.pet.bond);
+  expect(after.xp).toBe(initial.xp);
+  expect(after.coins).toBe(initial.coins);
+  expect(after.pet.growthSeconds - initial.pet.growthSeconds).toBeLessThan(3);
+  await expect(page.locator('#pet-thought')).toContainText('Contigo');
+});
+test('comer aumenta Apetito y consume una porción, sin cobrar puntos al elegir la herramienta', async ({
   page,
 }) => {
   await seedState(page, bornState());
   await gotoGame(page);
   const before = await readState(page);
-  await page.getByRole('button', { name: 'Comida', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Comida', exact: true })).toHaveAttribute(
+  await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Alimentar', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -117,12 +156,12 @@ test('comer reduce Hambre y consume una porción, sin cobrar semillas al elegir 
   await expect(page.locator('#coins')).toHaveText('80');
   await touchPet(page);
   const fed = await readState(page);
-  expect(fed.pet.needs.hunger).toBeLessThan(before.pet.needs.hunger);
+  expect(fed.pet.needs.appetite).toBeGreaterThan(before.pet.needs.appetite);
   expect(fed.inventory.food['fruit-bowl']).toBe(0);
   expect(fed.pet.diet['fruit-bowl']).toBe(1);
   await expect(page.locator('#coins')).toHaveText('80');
   await page.locator('#open-pet').click();
-  await expect(page.getByRole('progressbar', { name: 'Hambre', exact: true })).toBeVisible();
+  await expect(page.getByRole('progressbar', { name: 'Apetito', exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar', { name: 'Saciedad', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Cambiar nombre' }).click();
   await page.getByLabel('Su nombre', { exact: true }).fill('Menta');
@@ -137,9 +176,9 @@ test('una mascota nacida camina al tocar el suelo sin gastar la comida seleccion
 }) => {
   await seedState(page, bornState('young'));
   await gotoGame(page);
-  await page.getByRole('button', { name: 'Comida', exact: true }).click();
+  await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
   const initial = await petCenter(page);
-  const world = await page.locator('canvas').boundingBox();
+  const world = await page.locator('#pet-scene').boundingBox();
   await page.mouse.click(world!.x + world!.width * 0.76, world!.y + world!.height * 0.64);
   await expect.poll(async () => (await petCenter(page)).x).toBeGreaterThan(initial.x + 15);
   expect((await readState(page)).inventory.food['fruit-bowl']).toBe(1);
@@ -148,7 +187,7 @@ test('una mascota nacida camina al tocar el suelo sin gastar la comida seleccion
 test('arrastrar comida hasta la mascota aplica un solo cuidado', async ({ page }) => {
   await seedState(page, bornState());
   await gotoGame(page);
-  const source = await page.getByRole('button', { name: 'Comida', exact: true }).boundingBox();
+  const source = await page.getByRole('button', { name: 'Alimentar', exact: true }).boundingBox();
   const target = await petCenter(page);
   await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
   await page.mouse.down();
@@ -166,12 +205,10 @@ test('viajar cambia el paisaje y conserva el origen, la identidad y la dieta', a
   await seedState(page, initial);
   await gotoGame(page);
   await visitBiome(page, 'coast');
-  await expect(page.locator('canvas')).toHaveAttribute('data-world-biome', 'coast');
-  await expect(page.locator('canvas')).toHaveAttribute('data-origin-biome', 'forest');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-world-biome', 'coast');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-origin-biome', 'forest');
   await expect(page.locator('#biome-name')).toHaveText('Costa Nácar');
-  await page.screenshot({ path: 'artifacts/xisverso-coast-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: 'artifacts/xisverso-coast-mobile.png' });
   await visitBiome(page, 'tundra');
   await page.reload();
   const state = await readState(page);
@@ -188,11 +225,12 @@ test('un joven crece a adulto y queda libre sin desaparecer al criar otro huevo'
   page,
 }) => {
   const initial = bornState('young');
-  initial.pet.growthSeconds = 650;
+  initial.pet.growthSeconds = ADULT_SECONDS - 60;
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
   await seedState(page, initial);
   await gotoGame(page);
-  await touchPet(page);
-  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'adult');
+  await page.clock.fastForward(61000);
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-stage', 'adult');
   await visitBiome(page, 'coast');
   await page.locator('#open-pet').click();
   await page.locator('#release-pet').click();
@@ -209,7 +247,6 @@ test('un joven crece a adulto y queda libre sin desaparecer al criar otro huevo'
   await visitBiome(page, 'forest');
   await openCollection(page);
   await expect(page.locator('#free-pet-count')).toContainText('1');
-  await page.screenshot({ path: 'artifacts/xisverso-collection.png' });
   await page.locator(`[data-visit-pet="${initial.pet.id}"]`).click();
   await expect(page.locator('#biome-name')).toHaveText('Costa Nácar');
   expect((await readState(page)).freePets).toHaveLength(1);
@@ -247,9 +284,7 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
   await expect(companions.nth(3)).toBeEnabled();
   await companions.nth(3).check();
   await expect(companions.nth(0)).toBeDisabled();
-  await page.screenshot({ path: 'artifacts/xisverso-expedition-party.png' });
   await page.locator('#start-expedition').click();
-  await page.screenshot({ path: 'artifacts/xisverso-exploration.png' });
   const departure = await readState(page);
   expect(departure.expedition?.companionIds).toHaveLength(3);
   expect(departure.expedition?.biome).toBe('forest');
@@ -269,8 +304,7 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
       initial.inventory.materials[material] + reward[material],
     );
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Cocina y mochila', exact: true }).click();
-  await page.screenshot({ path: 'artifacts/xisverso-kitchen.png' });
+  await openKitchen(page);
   await page.locator('[data-craft="fruit-bowl"]').click();
   const cooked = await readState(page);
   expect(cooked.inventory.food['fruit-bowl']).toBe(collected.inventory.food['fruit-bowl'] + 1);
@@ -286,77 +320,160 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
   expect((await readState(page)).expedition).toBeNull();
 });
 
-test('las cinco luciérnagas están dentro del campo, se ven y entregan una sola recompensa', async ({
-  page,
-}) => {
+test('el huevo espera a nacer antes de jugar las seis aventuras', async ({ page }) => {
   await gotoGame(page);
   await page.getByRole('button', { name: 'Jugar', exact: true }).click();
-  const field = await page.locator('#game-field').boundingBox();
-  expect(field!.width).toBeGreaterThan(200);
-  const flies = page.locator('.firefly');
-  await expect(flies).toHaveCount(5);
-  for (let index = 0; index < 5; index++) {
-    const fly = flies.nth(index);
-    await expect(fly).toBeVisible();
-    const bounds = await fly.boundingBox();
-    expect(bounds!.width).toBeGreaterThanOrEqual(44);
-    expect(bounds!.height).toBeGreaterThanOrEqual(44);
-    expect(bounds!.x).toBeGreaterThanOrEqual(field!.x);
-    expect(bounds!.y).toBeGreaterThanOrEqual(field!.y);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(field!.x + field!.width);
-    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(field!.y + field!.height);
-    const body = await fly.locator('.fly-body').evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { color: style.backgroundColor, shadow: style.boxShadow, opacity: style.opacity };
-    });
-    expect(body.color).not.toBe('rgba(0, 0, 0, 0)');
-    expect(body.shadow).not.toBe('none');
-    expect(Number(body.opacity)).toBeGreaterThan(0);
-    expect(
-      await fly.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-        const top = document.elementFromPoint(
-          bounds.x + bounds.width / 2,
-          bounds.y + bounds.height / 2,
-        );
-        return top === element || (top !== null && element.contains(top));
-      }),
-    ).toBe(true);
-  }
-  await page.screenshot({ path: 'artifacts/xisverso-fireflies.png' });
-  await page.getByRole('button', { name: 'Atrapar luciérnaga 1', exact: true }).click();
-  await page.getByRole('button', { name: 'Atrapar luciérnaga 2', exact: true }).click();
-  await expect(page.locator('#game-score')).toHaveText('2');
-  await expect(page.getByRole('heading', { name: '¡Un recuerdo más juntos!' })).toBeVisible({
-    timeout: 25000,
-  });
-  await expect(page.locator('#coins')).toHaveText('87');
-  await page.waitForTimeout(400);
-  await expect(page.locator('#coins')).toHaveText('87');
-  await page.getByRole('button', { name: 'Volver al refugio', exact: true }).click();
-  await page.reload();
-  await expect(page.locator('#coins')).toHaveText('87');
+  await expect(page.locator('#minigame-list [data-minigame]')).toHaveCount(6);
+  await expect(page.locator('#games-notice')).toContainText('nazca');
+  for (const button of await page.locator('#minigame-list [data-minigame]').all())
+    await expect(button).toBeDisabled();
 });
 
-test('los cuidados y el minijuego conservan alternativas de teclado y salir no entrega premios', async ({
+test('las luciérnagas cuentan al llegar la mascota y terminar entrega puntos una sola vez', async ({
+  page,
+}) => {
+  const initial = bornState('baby');
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openActivity(page, 'fireflies');
+  const flies = page.locator('#game-field .firefly');
+  await expect(flies).toHaveCount(5);
+  const field = await page.locator('#game-field').boundingBox();
+  for (const fly of await flies.all()) {
+    const bounds = await fly.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.x).toBeGreaterThanOrEqual(field!.x);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(field!.x + field!.width);
+  }
+  const beforeX = await page.locator('#game-field canvas').getAttribute('data-pet-x');
+  await flies.first().click();
+  await expect(page.locator('#game-score')).toHaveText('0');
+  await expect(page.locator('#game-score')).toHaveText('1', { timeout: 6000 });
+  expect(await page.locator('#game-field canvas').getAttribute('data-pet-x')).not.toBe(beforeX);
+  expect((await readState(page)).coins).toBe(80);
+  await page.clock.fastForward(21000);
+  await expect(page.locator('#game-result')).toContainText('+6 puntos');
+  expect((await readState(page)).coins).toBe(86);
+  await page.clock.fastForward(1000);
+  expect((await readState(page)).coins).toBe(86);
+  await page.getByRole('button', { name: 'Volver al refugio', exact: true }).click();
+  await page.reload();
+  expect((await readState(page)).coins).toBe(86);
+});
+
+for (const kind of ['fruit', 'puddles', 'rhythm', 'memory', 'ball'] as const) {
+  test(`la mascota consigue un acierto en ${kind}; salir antes no entrega puntos`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Math.random = () => 0.5;
+    });
+    await seedState(page, bornState('baby'));
+    await gotoGame(page);
+    await openActivity(page, kind);
+    const field = page.locator('#game-field');
+    const pet = field.locator('canvas');
+    if (kind === 'fruit') {
+      await expect(page.locator('#game-score')).not.toHaveText('0', { timeout: 7000 });
+    } else if (kind === 'puddles') {
+      await expect
+        .poll(async () => Number(await field.getAttribute('data-puddle-x')), {
+          intervals: [50],
+          timeout: 7000,
+        })
+        .toBeLessThan(0.49);
+      await page.getByRole('button', { name: 'Saltar', exact: true }).click();
+      await expect(page.locator('#game-score')).toHaveText('1', { timeout: 3000 });
+    } else if (kind === 'rhythm') {
+      await expect
+        .poll(async () => Number(await field.getAttribute('data-rhythm-phase')), {
+          intervals: [50],
+        })
+        .toBeGreaterThan(900);
+      const direction = Number(await field.getAttribute('data-rhythm-direction'));
+      await page.keyboard.press(['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'][direction]);
+      await expect(page.locator('#game-score')).toHaveText('1');
+    } else if (kind === 'memory') {
+      const observed = await field.evaluate(async (element) => {
+        const canvas = element.querySelector('canvas')!;
+        const ctx = canvas.getContext('2d')!;
+        const points = [
+          { x: 0.25, y: 0.47 },
+          { x: 0.43, y: 0.6 },
+          { x: 0.62, y: 0.47 },
+          { x: 0.78, y: 0.64 },
+        ];
+        const sequence: number[] = [];
+        let last = -1;
+        const start = performance.now();
+        return await new Promise<number[]>((resolve) => {
+          function sample() {
+            const active = points.findIndex((point) => {
+              const pixel = ctx.getImageData(
+                point.x * canvas.width - (14 * canvas.width) / canvas.clientWidth,
+                (point.y + 0.015) * canvas.height,
+                1,
+                1,
+              ).data;
+              return pixel[0] > 235 && pixel[1] > 220 && pixel[2] < 195;
+            });
+            if (active >= 0 && active !== last) sequence.push(active);
+            last = active;
+            if (
+              (element as HTMLElement).dataset.memoryPhase === 'answer' ||
+              performance.now() - start > 4000
+            )
+              resolve(sequence);
+            else requestAnimationFrame(sample);
+          }
+          sample();
+        });
+      });
+      expect(observed.length).toBeGreaterThanOrEqual(2);
+      for (const [index, stone] of observed.entries()) {
+        await page.getByRole('button', { name: `Piedra ${stone + 1}`, exact: true }).click();
+        if (index < observed.length - 1)
+          await expect(field.locator('.activity-status')).toContainText('Qué piedra sigue');
+      }
+      await expect(page.locator('#game-score')).toHaveText('1', { timeout: 4000 });
+    } else {
+      const bounds = await pet.boundingBox();
+      // Go around the ball before approaching from the left; crossing diagonally pushes it sideways.
+      await page.mouse.click(bounds!.x + bounds!.width * 0.2, bounds!.y + bounds!.height * 0.75);
+      await expect
+        .poll(async () => Number(await pet.getAttribute('data-pet-x')))
+        .toBeLessThan(0.22);
+      await page.mouse.click(bounds!.x + bounds!.width * 0.2, bounds!.y + bounds!.height * 0.61);
+      await expect
+        .poll(async () => Number(await pet.getAttribute('data-pet-y')))
+        .toBeCloseTo(0.61, 2);
+      await page.mouse.click(bounds!.x + bounds!.width * 0.94, bounds!.y + bounds!.height * 0.61);
+      await expect(page.locator('#game-score')).toHaveText('1', { timeout: 7000 });
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#game-dialog')).not.toBeVisible();
+    expect((await readState(page)).coins).toBe(80);
+  });
+}
+
+test('el teclado permite alimentar y cancelar un minijuego sin obtener puntos', async ({
   page,
 }) => {
   await seedState(page, bornState());
   await gotoGame(page);
   await page.keyboard.press('2');
-  const proxy = page.getByRole('button', { name: 'Interactuar con Nubi', exact: true });
-  await proxy.focus();
+  await page.locator('#pet-interact').focus();
   await page.keyboard.press('Enter');
   expect((await readState(page)).inventory.food['fruit-bowl']).toBe(0);
-  await page.getByRole('button', { name: 'Jugar', exact: true }).click();
+  await openActivity(page, 'fireflies');
   await page.getByRole('button', { name: 'Atrapar luciérnaga 1', exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('#game-score')).toHaveText('1');
+  await expect(page.locator('#game-score')).toHaveText('1', { timeout: 6000 });
   await page.keyboard.press('Escape');
   await expect(page.locator('#game-dialog')).not.toBeVisible();
-  await expect(page.locator('#coins')).toHaveText('80');
+  expect((await readState(page)).coins).toBe(80);
 });
-
 for (const height of [844, 667]) {
   test(`el refugio móvil de 390x${height} mantiene el cuidado, los viajes y la cocina sin desbordar`, async ({
     page,
@@ -371,7 +488,7 @@ for (const height of [844, 667]) {
           document.documentElement.scrollHeight <= innerHeight,
       ),
     ).toBe(true);
-    for (const name of ['Caricias', 'Comida', 'Burbujas', 'Siesta', 'Jugar']) {
+    for (const name of ['Caricias', 'Alimentar', 'Burbujas', 'Siesta', 'Jugar']) {
       const box = await page.getByRole('button', { name, exact: true }).boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -381,8 +498,7 @@ for (const height of [844, 667]) {
     await feedPet(page);
     expect((await readState(page)).inventory.food['fruit-bowl']).toBe(0);
     await page.mouse.move(5, 5);
-    await page.screenshot({ path: `artifacts/xisverso-mobile-${height}.png` });
-    await page.getByRole('button', { name: 'Cocina y mochila', exact: true }).click();
+    await openKitchen(page);
     await expect(page.locator('[data-craft="fruit-bowl"]')).toBeVisible();
     await page.keyboard.press('Escape');
     await visitBiome(page, 'coast');
@@ -398,7 +514,7 @@ test('un guardado dañado o el almacenamiento bloqueado no impiden incubar', asy
   await expect(page.locator('#welcome-dialog')).toBeVisible();
   await expect(page.locator('#toast')).toContainText('guardado anterior estaba dañado');
   await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
-  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-stage', 'egg');
   await context.close();
   const blocked = await browser.newContext();
   await blocked.addInitScript(() => {
@@ -413,13 +529,11 @@ test('un guardado dañado o el almacenamiento bloqueado no impiden incubar', asy
   await gotoGame(blockedPage);
   await expect(blockedPage.locator('.local-status')).toContainText('Sin guardar');
   await blockedPage.locator('#open-pet').click();
-  const before = Number(await blockedPage.locator('#life-progress').getAttribute('aria-valuenow'));
-  await blockedPage.keyboard.press('Escape');
-  await touchPet(blockedPage);
-  await blockedPage.locator('#open-pet').click();
-  expect(
-    Number(await blockedPage.locator('#life-progress').getAttribute('aria-valuenow')),
-  ).toBeGreaterThan(before);
+  await blockedPage.locator('#rename-button').click();
+  await blockedPage.getByLabel('Su nombre', { exact: true }).fill('Una sesión');
+  await blockedPage.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
+  await blockedPage.waitForTimeout(1200);
+  await expect(blockedPage.locator('#pet-name')).toHaveText('Una sesión');
   await blocked.close();
 });
 
@@ -437,18 +551,18 @@ test('otra pestaña recibe el alimento consumido y no revierte el progreso al re
     .poll(async () =>
       Number(
         await second
-          .getByRole('progressbar', { name: 'Hambre', exact: true })
+          .getByRole('progressbar', { name: 'Apetito', exact: true })
           .getAttribute('aria-valuenow'),
       ),
     )
-    .toBeLessThan(55);
+    .toBeGreaterThan(70);
   await second.reload();
   expect((await readState(second)).inventory.food['fruit-bowl']).toBe(0);
   await page.reload();
   expect((await readState(page)).inventory.food['fruit-bowl']).toBe(0);
 });
 
-test('migra v1 a v2 como adulta, invierte el hambre y conserva el respaldo anterior', async ({
+test('migra v1 a v3 como adulta, conserva apetito y mantiene el respaldo anterior', async ({
   page,
 }) => {
   const previousSave = {
@@ -479,11 +593,11 @@ test('migra v1 a v2 como adulta, invierte el hambre y conserva el respaldo anter
   await expect(page.locator('#pet-name')).toHaveText('Luna');
   await expect(page.locator('#biome-name')).toHaveText('Costa Nácar');
   const state = await readState(page);
-  expect(state.version).toBe(2);
+  expect(state.version).toBe(3);
   expect(state.pet.stage).toBe('adult');
   expect(state.pet.id).toBe('xis-test-123');
-  expect(state.pet.needs.hunger).toBeGreaterThanOrEqual(34);
-  expect(state.pet.needs.hunger).toBeLessThan(35);
+  expect(state.pet.needs.appetite).toBeGreaterThan(65);
+  expect(state.pet.needs.appetite).toBeLessThanOrEqual(66);
   expect(state.coins).toBe(123);
   expect(state.xp).toBe(35);
   expect(state.miniGameBest).toBe(11);
@@ -509,10 +623,9 @@ test('el refugio horizontal mantiene una mascota nacida y respeta movimiento red
     true,
   );
   await page.mouse.move(5, 5);
-  await page.screenshot({ path: 'artifacts/xisverso-landscape.png' });
 });
 
-test('recupera el respaldo v1 válido si el guardado v2 está dañado', async ({ page }) => {
+test('recupera el respaldo v1 válido si el guardado v3 está dañado', async ({ page }) => {
   const previousSave = {
     version: 1,
     pet: {
@@ -541,13 +654,13 @@ test('recupera el respaldo v1 válido si el guardado v2 está dañado', async ({
   await gotoGame(page);
   await expect(page.locator('#pet-name')).toHaveText('Azul');
   await expect(page.locator('#toast')).toContainText('Recuperamos la copia');
-  await expect(page.locator('canvas')).toHaveAttribute('data-origin-biome', 'tundra');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-origin-biome', 'tundra');
   const recovered = await readState(page);
-  expect(recovered.version).toBe(2);
+  expect(recovered.version).toBe(3);
   expect(recovered.pet.id).toBe(previousSave.pet.id);
   expect(recovered.pet.stage).toBe('adult');
-  expect(recovered.pet.needs.hunger).toBeGreaterThanOrEqual(10);
-  expect(recovered.pet.needs.hunger).toBeLessThan(11);
+  expect(recovered.pet.needs.appetite).toBeGreaterThan(89);
+  expect(recovered.pet.needs.appetite).toBeLessThanOrEqual(90);
   expect(recovered.coins).toBe(245);
   expect(recovered.xp).toBe(120);
   expect(recovered.level).toBe(2);
@@ -570,7 +683,6 @@ test('la primera visita permite elegir huevo Estelar y criar en la costa, y guar
   expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBeNull();
   await page.locator('input[name="starter-egg"][value="starry"]').check();
   await page.locator('input[name="starter-biome"][value="coast"]').check();
-  await page.screenshot({ path: 'artifacts/xisverso-welcome-desktop.png' });
   await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
   await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   const state = await readState(page);
@@ -579,8 +691,8 @@ test('la primera visita permite elegir huevo Estelar y criar en la costa, y guar
   expect(state.pet.biome).toBe('coast');
   expect(state.currentBiome).toBe('coast');
   expect(state.pet.growthSeconds).toBeLessThan(2);
-  await expect(page.locator('canvas')).toHaveAttribute('data-world-biome', 'coast');
-  await expect(page.locator('canvas')).toHaveAttribute('data-origin-biome', 'coast');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-world-biome', 'coast');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-origin-biome', 'coast');
   await page.reload();
   await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   const restored = await readState(page);
@@ -600,7 +712,7 @@ test('elegir y esperar en la bienvenida no guarda ni incuba antes de confirmar',
   await page.clock.fastForward(65000);
   await page.keyboard.press('Escape');
   await expect(page.locator('#welcome-dialog')).toBeVisible();
-  await expect(page.locator('canvas')).toHaveAttribute('data-stage', 'egg');
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-stage', 'egg');
   expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)).toBeNull();
   await page.reload();
   await expect(page.locator('#welcome-dialog')).toBeVisible();
@@ -611,7 +723,7 @@ test('elegir y esperar en la bienvenida no guarda ni incuba antes de confirmar',
   expect(created.pet.growthSeconds).toBeLessThan(2);
 });
 
-test('una partida v2 válida entra directamente al refugio y conserva su compañero', async ({
+test('una partida v3 válida entra directamente al refugio y conserva su compañero', async ({
   page,
 }) => {
   const previous = bornState('adult', 1);
@@ -670,7 +782,6 @@ test('la selección inicial cabe en móvil y deja alcanzar el botón para comenz
   const button = await begin.boundingBox();
   expect(button!.y).toBeGreaterThanOrEqual(0);
   expect(button!.y + button!.height).toBeLessThanOrEqual(667);
-  await page.screenshot({ path: 'artifacts/xisverso-welcome-mobile.png' });
   await begin.click();
   await expect(dialog).not.toBeVisible();
   expect((await readState(page)).pet.biome).toBe('tundra');
@@ -692,7 +803,7 @@ test('otra pestaña en bienvenida retoma la partida iniciada sin sobrescribirla'
   await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
   const first = await readState(page);
   await expect(other.locator('#welcome-dialog')).not.toBeVisible();
-  await expect(other.locator('canvas')).toHaveAttribute('data-origin-biome', 'coast');
+  await expect(other.locator('#pet-scene')).toHaveAttribute('data-origin-biome', 'coast');
   const adopted = await readState(other);
   expect(adopted.pet.id).toBe(first.pet.id);
   expect(adopted.pet.seed).toBe(first.pet.seed);
@@ -700,4 +811,203 @@ test('otra pestaña en bienvenida retoma la partida iniciada sin sobrescribirla'
   await other.reload();
   await expect(other.locator('#welcome-dialog')).not.toBeVisible();
   expect((await readState(other)).pet.id).toBe(first.pet.id);
+});
+
+test('Alimentar despliega arriba Cocinar y Elegir alimento sin gastar una ración', async ({
+  page,
+}) => {
+  await seedState(page, bornState('baby'));
+  await gotoGame(page);
+  const feed = page.getByRole('button', { name: 'Alimentar', exact: true });
+  await feed.click();
+  const panel = page.locator('#food-options');
+  await expect(panel).toBeVisible();
+  const buttonBounds = await feed.boundingBox();
+  const panelBounds = await panel.boundingBox();
+  expect(panelBounds!.y + panelBounds!.height).toBeLessThanOrEqual(buttonBounds!.y + 1);
+  await expect(panel.getByRole('button', { name: 'Cocinar', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Elegir alimento', exact: true }).click();
+  await page.locator('#food-choice-list [data-select-food="fruit-bowl"]').click();
+  expect((await readState(page)).inventory.food['fruit-bowl']).toBe(1);
+  expect((await readState(page)).coins).toBe(80);
+});
+
+test('la profundidad cambia el tamaño sin separar los pies del suelo', async ({ page }) => {
+  await seedState(page, bornState('young'));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await gotoGame(page);
+  const before = await page.locator('#pet-interact').boundingBox();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  const farther = await page.locator('#pet-interact').boundingBox();
+  expect(farther!.height).toBeLessThan(before!.height);
+  expect(farther!.y + farther!.height).toBeLessThan(before!.y + before!.height);
+  const world = await page.locator('#pet-scene').boundingBox();
+  const groundY = Number(await page.locator('#pet-scene').getAttribute('data-pet-ground-y'));
+  expect(farther!.y + farther!.height).toBeCloseTo(world!.y + groundY * world!.height, 0);
+});
+
+test('los adultos visitan de vez en cuando y permanecen en su colección cuando se van', async ({
+  page,
+}) => {
+  const id = 'xis-free-1';
+  let hash = 0;
+  for (const character of id) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
+  const base =
+    Math.floor(Date.now() / 180000) * 180000 + (((180 - (hash % 180)) % 180) + 12) * 1000;
+  const initial = bornState('baby', 1);
+  initial.lastUpdated = base;
+  initial.freePets[0].releasedAt = base - 1000;
+  await page.clock.install({ time: new Date(base) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-companions', '1');
+  await page.clock.fastForward(35000);
+  await expect(page.locator('#pet-scene')).toHaveAttribute('data-companions', '0');
+  await openCollection(page);
+  await expect(page.locator('#free-pet-count')).toHaveText('1');
+  expect((await readState(page)).freePets[0].id).toBe(id);
+});
+
+test('comprar decoración descuenta puntos una vez y conserva la compra al recargar', async ({
+  page,
+}) => {
+  await seedState(page, bornState('baby'));
+  await gotoGame(page);
+  await page.getByRole('button', { name: 'Menú', exact: true }).click();
+  await page
+    .locator('#menu-dialog')
+    .getByRole('button', { name: 'Decoraciones', exact: true })
+    .click();
+  await page.locator('[data-buy-decoration="flowers"]').click();
+  await expect(page.locator('#shop-points')).toHaveText('40');
+  await expect(page.locator('[data-buy-decoration="flowers"]')).toBeDisabled();
+  await expect(page.locator('[data-buy-decoration="lantern"]')).toBeDisabled();
+  expect((await readState(page)).decorations).toEqual(['flowers']);
+  await page.reload();
+  expect((await readState(page)).decorations).toEqual(['flowers']);
+  expect((await readState(page)).coins).toBe(40);
+});
+
+test('música y efectos se silencian por separado y conservan sus volúmenes', async ({ page }) => {
+  await gotoGame(page);
+  await page.getByRole('button', { name: 'Sonido y música', exact: true }).click();
+  await page.locator('#music-enabled').uncheck();
+  await expect(page.locator('#effects-enabled')).toBeChecked();
+  await page.locator('#effects-enabled').uncheck();
+  await page.locator('#music-volume').evaluate((element) => {
+    (element as HTMLInputElement).value = '37';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('#effects-volume').evaluate((element) => {
+    (element as HTMLInputElement).value = '61';
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const settings = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('xisverso.audio.v1')!),
+  );
+  expect(settings).toEqual({
+    music: false,
+    effects: false,
+    musicVolume: 0.37,
+    effectsVolume: 0.61,
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Sonido y música', exact: true }).click();
+  await expect(page.locator('#music-enabled')).not.toBeChecked();
+  await expect(page.locator('#effects-enabled')).not.toBeChecked();
+  await expect(page.locator('#music-volume')).toHaveValue('37');
+  await expect(page.locator('#effects-volume')).toHaveValue('61');
+});
+
+test('abrir visitas no inventa amigos ni conecta Firebase sin elegir una acción', async ({
+  page,
+}) => {
+  const remote: string[] = [];
+  page.on('request', (request) => {
+    if (
+      /(?:identitytoolkit|securetoken|firestore)\.googleapis\.com|firebaseio\.com/.test(
+        request.url(),
+      )
+    )
+      remote.push(request.url());
+  });
+  await gotoGame(page);
+  await page.getByRole('button', { name: 'Menú', exact: true }).click();
+  await page
+    .locator('#menu-dialog')
+    .getByRole('button', { name: 'Visitar amigos', exact: true })
+    .click();
+  await expect(page.locator('#community-dialog')).toBeVisible();
+  await expect(page.locator('#friend-code')).toHaveValue('');
+  await expect(page.locator('#share-code-panel')).not.toBeVisible();
+  if ((await page.locator('#firebase-status').textContent())?.includes('esperan')) {
+    await expect(page.locator('#connect-visits')).toBeDisabled();
+    await expect(page.locator('#publish-world')).toBeDisabled();
+  }
+  expect(remote).toEqual([]);
+});
+
+test('si solo falla escribir, conserva la sesión y vuelve a guardar al recuperarse', async ({
+  page,
+}) => {
+  await seedState(page, bornState('baby'));
+  await gotoGame(page);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    (window as unknown as { restoreWrites: () => void }).restoreWrites = () => {
+      Storage.prototype.setItem = original;
+    };
+    Storage.prototype.setItem = () => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    };
+  });
+  await page.locator('#open-pet').click();
+  await page.locator('#rename-button').click();
+  await page.getByLabel('Su nombre', { exact: true }).fill('Luna sin archivo');
+  await page.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
+  await expect(page.locator('.local-status')).toContainText('Sin guardar');
+  await page.waitForTimeout(2200);
+  await expect(page.locator('#pet-name')).toHaveText('Luna sin archivo');
+  expect((await readState(page)).pet.name).toBe('Nubi');
+  await page.evaluate(() => (window as unknown as { restoreWrites: () => void }).restoreWrites());
+  await page.locator('#open-pet').click();
+  await page.locator('#rename-button').click();
+  await page.getByLabel('Su nombre', { exact: true }).fill('Luna recuperada');
+  await page.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
+  expect((await readState(page)).pet.name).toBe('Luna recuperada');
+});
+
+test('migra v2 conservando al joven y convirtiendo hambre en apetito una sola vez', async ({
+  page,
+}) => {
+  const current = bornState('young');
+  const { decorations: _decorations, ...previous } = current;
+  const old = {
+    ...previous,
+    version: 2,
+    pet: {
+      ...current.pet,
+      stage: 'young',
+      growthSeconds: 120,
+      needs: { hunger: 55, energy: 64, hygiene: 65, joy: 65 },
+    },
+  };
+  const raw = JSON.stringify(old);
+  await page.addInitScript(
+    ({ key, raw }) => {
+      if (!localStorage.getItem(key)) localStorage.setItem(key, raw);
+    },
+    { key: V2_KEY, raw },
+  );
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).not.toBeVisible();
+  const migrated = await readState(page);
+  expect(migrated.version).toBe(3);
+  expect(migrated.pet.stage).toBe('young');
+  expect(migrated.pet.id).toBe(old.pet.id);
+  expect(migrated.pet.needs.appetite).toBeCloseTo(45, 1);
+  expect(await page.evaluate((key) => localStorage.getItem(key), V2_KEY)).toBe(raw);
+  await page.reload();
+  expect((await readState(page)).pet.needs.appetite).toBeCloseTo(45, 1);
 });

@@ -2,90 +2,102 @@
 
 **Un mundo vivo de XisSoft.**
 
-Xisverso combina **Xisver + universo**. Es un juego local de mascotas originales: incubar, cuidar, explorar, cocinar y volver a encontrarse con las criaturas que han crecido contigo. Mascotas, huevos y escenarios se dibujan en Canvas 2D, sin sprites ni modelos externos.
+Xisverso combina **Xisver + universo**. Es un juego de mascotas originales: incubar, cuidar, explorar, cocinar y volver a encontrarse con las criaturas que han crecido contigo. Mascotas, huevos, decoraciones y escenarios se dibujan en Canvas 2D, sin sprites ni modelos externos. La partida y su economía se conservan en este navegador; las visitas opcionales con Firebase comparten una vista del refugio.
 
 ## Qué puedes hacer
 
-- Elegir al empezar un huevo **Moteado, Rayado o Estelar** y su bioma de crianza: bosque, costa o tundra.
-- Criar una mascota desde **huevo → joven → adulto**, con nombre editable, necesidades, vínculo y progreso.
-- Dar calor al huevo con Caricias; después de nacer, alimentar, bañar, acariciar y descansar dentro del refugio.
-- Dejar libre a una mascota adulta en el bioma que visitas y empezar a cuidar un nuevo huevo. Los adultos siguen en tu colección y puedes visitarlos.
-- Interactuar con tus mascotas libres cuando están en el mismo bioma que tu compañero nacido.
-- Viajar entre Bosque Susurro, Costa Nácar y Tundra Aurora. Viajar cambia el escenario, no el origen ni la apariencia de una mascota.
-- Explorar para conseguir ingredientes; puedes invitar a **hasta tres mascotas libres** para traer más materiales.
-- Preparar recetas con los ingredientes de la mochila y dar la comida preparada a tu mascota.
-- Jugar a atrapar luciérnagas durante 20 segundos.
-- Guardar automáticamente el progreso en este navegador, con recuperación de partidas de la primera versión.
-
-Todo lo anterior ocurre entre mascotas de tu propia partida. Las cuentas, visitas a otros usuarios y partidas multijugador siguen planificadas.
+- Elegir un huevo **Moteado, Rayado o Estelar** y un bioma de crianza: bosque, costa o tundra.
+- Criar una mascota desde **huevo → bebé → joven → adulto**, con nombre editable, necesidades, vínculo y progreso.
+- Acariciar tantas veces como quieras; después de nacer, alimentar, bañar y ayudar a descansar.
+- Dejar libre a un adulto y cuidar otro huevo. Los adultos permanecen en tu colección, pueden acompañar expediciones y aparecen ocasionalmente en su bioma.
+- Viajar entre Bosque Susurro, Costa Nácar y Tundra Aurora conservando el origen y los rasgos de cada mascota.
+- Explorar con hasta tres adultos libres, reunir ingredientes y preparar tres recetas.
+- Jugar seis minijuegos de 20 segundos en los que participa tu mascota.
+- Ganar puntos jugando y comprar seis decoraciones para el mundo, sin dinero real.
+- Escuchar música ambiental propia de cada bioma y efectos de sonido, con controles independientes.
+- Compartir una vista de tu refugio y visitar el de un amigo mediante un código con la conexión Firebase configurada localmente.
 
 ## Cómo jugar
 
-La primera vez aparece una bienvenida para escoger tu huevo y su primer hogar. La crianza empieza al pulsar **Comenzar nuestra historia**; las selecciones previas no se guardan ni hacen avanzar la incubación. Si ya hay una partida válida, se abre directamente el refugio conservando tu compañero y su progreso.
+La primera vez aparece una bienvenida para escoger huevo y hogar. La crianza empieza al pulsar **Comenzar nuestra historia**. Esperar o cambiar opciones antes de confirmar no guarda ni incuba una partida parcial. Una partida válida entra directamente al refugio.
 
-Toca el huevo para darle calor. Cuando nazca, toca el suelo para caminar y elige Caricias, Comida, Burbujas o Siesta antes de tocar a la mascota. También puedes arrastrar una herramienta hasta ella. La comida consume una porción preparada; seleccionar una herramienta no gasta recursos.
+Toca el huevo para darle cariño. Cuando nazca, toca el suelo para caminar y elige Caricias, Alimentar, Burbujas o Siesta antes de tocar a la mascota. También puedes arrastrar una herramienta hasta ella. Al pulsar **Alimentar** se abre encima del botón un menú para **Cocinar** o **Elegir alimento**. Seleccionar una herramienta o una ración no consume recursos; alimentar consume una porción preparada.
 
-Pulsa el nombre de tu compañero para consultar **Hambre**, energía, higiene, ánimo y crecimiento. **Hambre baja es mejor**: 0 significa que acaba de comer y 100 que tiene mucha hambre. Las otras tres necesidades funcionan al contrario: cuanto más altas, mejor.
+Pulsa el nombre de tu compañero para consultar **Apetito**, energía, higiene, ánimo y crecimiento. Todas las necesidades usan la misma orientación: **100 es bienestar y 0 requiere cuidados**. En Apetito, 100 significa que está lleno y 0 que tiene mucha hambre. Comer lo aumenta; el tiempo lo reduce lentamente.
 
-El letrero de exploración permite iniciar una salida y recoger sus materiales cuando termine. Selecciona hasta tres adultos de tu colección para acompañarte. La cocina muestra qué ingredientes necesitas, qué puedes preparar y cuántas porciones tienes.
+El crecimiento usa tiempo real:
 
-Los huevos Moteado, Rayado y Estelar tienen patrones visuales diferentes y reciben los mismos cuidados. Puedes combinar cualquiera con los tres biomas. El bioma donde se crea el huevo fija sus rasgos procedurales. Llevar esa mascota de visita a otro bioma no la transforma. Al liberar un adulto, su hogar será el bioma actual; puedes volver a verlo allí y criar otro huevo.
+| Etapa          | Duración antes de la siguiente |
+| -------------- | ------------------------------ |
+| Huevo → bebé   | 5 horas                        |
+| Bebé → joven   | 20 horas                       |
+| Joven → adulto | 3 días                         |
 
-El menú reúne tus mascotas, la cocina, la bitácora de esta sesión y el próximo capítulo de comunidad. Con teclado, 1–4 seleccionan herramientas y las flechas indican un destino para las mascotas nacidas. Tab y Enter recorren y activan los controles, incluida la mascota.
+El tiempo transcurre también con el juego cerrado. Los cuidados, la comida y los minijuegos no acortan esas etapas. Las caricias siguen disponibles con el ánimo lleno y no aumentan vínculo, experiencia ni crecimiento. Las necesidades bajan lentamente según la etapa y el bioma; al regresar se limita el deterioro a ocho horas despierto, sin muerte permanente.
 
-Los ritmos de crecimiento son cortos y configurables para probar el ciclo: el huevo tarda 60 segundos y la etapa joven 10 minutos. Dar calor al huevo añade 10 segundos de progreso; los cuidados y la comida también aceleran el crecimiento. La alimentación queda registrada por receta, pero **todavía no decide ramas de evolución ni cambios de aspecto**: ese diseño se definirá después.
+El bebé es una pequeña forma redonda o flotante con ojos y sin extremidades. El joven desarrolla más rasgos y extremidades pequeñas; el adulto tiene su estructura completa. La mascota ocupa menos pantalla y cambia de escala según la profundidad al caminar. Las mascotas libres aparecen en visitas breves de hasta 24 segundos por ciclo de 180 segundos; la colección sigue disponible aunque no estén en la escena.
 
-## Guardados y límites
+El letrero **Explorar** inicia una salida y permite recoger los materiales al terminar. La cocina muestra ingredientes, recetas y raciones. La dieta se registra, pero todavía no decide ramas de evolución ni cambios de aspecto.
 
-La partida actual usa `xisverso.save.v2`. Si v2 falta o está dañado y existe un respaldo válido `xisverso.save.v1`, se recupera y migra conservando identidad, nombre, semillas, experiencia y récord. La mascota anterior se conserva como adulta y el antiguo valor de saciedad se convierte en hambre. El guardado v1 queda disponible como respaldo.
+## Juegos, puntos y sonido
 
-El navegador y el dispositivo conservan su propia partida. Borrar sus datos elimina el guardado; abrir el juego desde otro origen, como GitHub Pages, crea un guardado independiente. La ausencia tiene un límite de deterioro y no provoca muerte permanente.
+**Jugar** ofrece Luciérnagas en compañía, Lluvia de frutas, Salta los charcos, Baile del bosque, Sendero de recuerdos y Pelota al claro. Tu mascota recoge, salta, baila, recuerda o empuja según el juego. Cada sesión dura 20 segundos; los puntos se entregan una sola vez al terminar y salir antes no concede premios. El huevo podrá participar después de nacer.
 
-La economía y el inventario son locales y modificables desde el equipo. Todavía no sirven como autoridad para un modo competitivo o compartido entre usuarios.
+Los puntos permiten comprar un jardín de flores, un farol, setas luminosas, un banco, una fuente y un arco. Las compras se guardan, no se duplican y sus elementos aparecen en el mundo. No hay compras con dinero real.
 
-## Ejecutar con PowerShell
+La música y los efectos se generan con Web Audio, sin descargar pistas ni usar servicios externos. El navegador inicia el audio después de una interacción. Puedes activar o silenciar música y efectos por separado y ajustar sus volúmenes; las preferencias se conservan y el audio se pausa al ocultar la página.
+
+## Guardados y visitas
+
+La clave actual es `xisverso.save.v3`. Si falta o está dañada, se buscan respaldos válidos v2 y v1. La migración conserva identidad, nombres, recursos, experiencia y récord. Los jóvenes y adultos de v2 mantienen la etapa alcanzada y su progreso relativo; el hambre de v2 se convierte en Apetito (`100 - hambre`). La saciedad de v1 ya tenía la orientación de Apetito y se conserva. Los respaldos anteriores no se eliminan.
+
+Cada navegador, dispositivo y origen conserva su propia partida. Borrar sus datos elimina ese guardado. El inventario y los puntos son locales y modificables; no constituyen recursos verificados para competir o comerciar entre usuarios.
+
+Las visitas de Firebase son voluntarias: se comparte manualmente una vista con nombre, bioma, apariencia de la mascota y decoraciones. Un amigo la abre con el código exacto. No se publica un directorio de usuarios ni se suben inventario, puntos o el guardado completo. El dueño puede retirar la vista. No hay interacción simultánea ni recompensas remotas.
+
+La conexión local utiliza el proyecto Firebase **Xisverso** (`xisverso-xissoft-20261117`), con aplicación web registrada, acceso anónimo y Firestore Standard gratuito en `nam5`, con facturación desactivada. Las reglas superaron 74 comprobaciones en emulador y el flujo real de visitas está verificado. Estos cambios del cliente siguen locales y todavía no aparecen en GitHub Pages. Consulta [Configuración de Firebase](docs/FIREBASE.md).
+
+## Ejecutar y verificar con PowerShell
 
 Requiere Node.js 24 y npm.
 
 ```powershell
-npm.cmd install
+npm.cmd ci
 npm.cmd run dev
 ```
 
-Abre personalmente http://127.0.0.1:4173/ o la dirección que muestre Vite. El comando no controla ventanas ni el navegador.
+Abre personalmente http://127.0.0.1:4173/ o la dirección que muestre Vite. También puedes usar `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`; esa opción solo afecta a ese proceso.
 
 ```powershell
 npm.cmd test
 npm.cmd run build
-npm.cmd run preview
-```
-
-`npm test` verifica las reglas de la simulación; `npm run build` comprueba TypeScript y genera `dist/`.
-
-## Verificación de la interfaz
-
-```powershell
 npm.cmd run test:e2e
 npm.cmd run check:pages
 ```
 
-Las pruebas de interfaz usan el puerto 4174 y una instancia aislada de Chrome sin ventana; no utilizan la sesión ni los datos del navegador personal. Requieren Google Chrome instalado. `check:pages` valida además la compilación servida bajo `/xisverso/`.
+Las pruebas de dominio comprueban simulación, migración y economía; las de interfaz ejercitan los flujos con Chrome aislado y sin ventana en el puerto 4174. Requieren Google Chrome instalado y no usan los datos del navegador personal. `build` comprueba TypeScript y genera `dist/`; `check:pages` comprueba los recursos y la persistencia bajo `/xisverso/`. Las pruebas locales no sustituyen la verificación de Firebase contra un proyecto configurado.
 
-Las pruebas cubren la bienvenida inicial, elección y persistencia de huevo y bioma, preservación de partidas existentes, espera sin incubación antes de confirmar, teclado, selección móvil y dos pestañas. También cubren migración, hambre, herramientas, crecimiento, liberación, visitas, exploración, cocina, interacción entre mascotas propias, luciérnagas, tamaños móviles y persistencia. La lógica de dominio se prueba por separado del DOM.
+Las comprobaciones de Firebase se ejecutan por separado:
 
-También puedes ejecutar `powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`. La opción de ejecución se aplica solo a ese proceso.
+```powershell
+npm.cmd run test:firebase-rules
+npm.cmd run check:firebase
+```
+
+`test:firebase-rules` requiere Java 21 en `PATH` y usa los emuladores de Auth y Firestore con el proyecto de prueba `demo-xisverso`, sin consumir cuota remota. `check:firebase` consume una pequeña parte de la cuota real: crea dos identidades anónimas temporales, publica una vista, la visita desde la segunda sesión y la retira. El recorrido real aprobó la conservación de identidad, inventario y puntos del visitante, la denegación de una nueva visita tras retirar la vista y la limpieza de las vistas e identidades de prueba.
 
 ## Desarrollo y publicación
 
-Tecnologías: TypeScript, Vite, Canvas 2D y APIs del navegador. La simulación está separada del dibujo y la interfaz; así podremos ampliar el contenido sin reconstruir el cuidado ni el guardado.
+Tecnologías: TypeScript, Vite, Canvas 2D, Web Audio y Firebase modular para las visitas opcionales. La simulación está separada del dibujo, la interfaz y la conexión remota.
 
 - [Ruta del proyecto](docs/ROADMAP.md)
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Decisiones de diseño y tecnología](docs/DECISIONS.md)
 - [Publicar en GitHub Pages con PowerShell](docs/GITHUB_PAGES.md)
+- [Configurar visitas con Firebase](docs/FIREBASE.md)
 
-El repositorio previsto es `xisver/xisverso` y la publicación de Pages utiliza `https://xisver.github.io/xisverso/`. `build:pages` genera esa ruta y el workflow publica los pushes a `main` cuando Pages está activado. Los scripts de publicación no cambian automáticamente la visibilidad de un repositorio existente.
+El repositorio es [xisver/xisverso](https://github.com/xisver/xisverso) y el sitio existente está publicado en [GitHub Pages](https://xisver.github.io/xisverso/). Los cambios locales no aparecen allí hasta que se suben y termina el workflow de publicación de `main`. `build:pages` genera la base `/xisverso/` y los scripts no cambian automáticamente la visibilidad del repositorio.
 
-El producto se llama Xisverso; la carpeta física conserva `TAMAGOTCHI` mientras la sesión actual la utiliza.
+La carpeta de este checkout es `C:\Users\Lenovo\Documents\ChatGPT\Xisverso`; el nombre del producto es Xisverso.
 
 **Desarrollado por XisSoft.** Copyright © 2026 XisSoft. Todos los derechos reservados. No se concede una licencia de código abierto en esta etapa.

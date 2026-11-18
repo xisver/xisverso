@@ -1,6 +1,6 @@
 # Publicar Xisverso en GitHub Pages
 
-El proyecto está preparado para `https://xisver.github.io/xisverso/`. La publicación remota todavía requiere iniciar sesión y ejecutar los pasos siguientes.
+El repositorio `xisver/xisverso` y el sitio [Xisverso en GitHub Pages](https://xisver.github.io/xisverso/) ya existen. Los pushes a `main` ejecutan el workflow de compilación y publicación. Estas instrucciones permiten actualizar el sitio o repetir su configuración; los cambios locales de esta iteración todavía necesitan subirse y completar ese workflow para aparecer allí.
 
 ## 1. Elegir la visibilidad
 
@@ -30,15 +30,17 @@ Si ya habías iniciado sesión y el push rechaza los archivos de workflows por s
 Para la opción pública de GitHub Free:
 
 ```powershell
-Set-Location -LiteralPath 'C:\Users\PC\Documents\ChatGPT\TAMAGOTCHI'
+Set-Location -LiteralPath 'C:\Users\Lenovo\Documents\ChatGPT\Xisverso'
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-github.ps1 -Visibility public
 ```
 
-Si tu plan permite Pages con código privado, usa `-Visibility private`. La carpeta mantiene su nombre físico `TAMAGOTCHI`, aunque el producto y el repositorio se llaman Xisverso.
+El checkout actual está en `C:\Users\Lenovo\Documents\ChatGPT\Xisverso`. El repositorio existente es público; conserva esa visibilidad. Si trabajas con otro repositorio privado y un plan compatible con Pages, el script permite `-Visibility private` sin cambiar automáticamente un repositorio existente.
 
 El script verifica la cuenta y la rama `main`, exige un árbol de trabajo limpio, crea `xisver/xisverso` si falta y sube los commits. Si el repositorio ya existe con otra visibilidad, se detiene sin modificarla. Tampoco fuerza ni reemplaza el historial remoto.
 
-## 4. Activar Pages y publicar
+## 4. Configuración de Pages y publicación
+
+Pages ya utiliza GitHub Actions en el repositorio existente. No hace falta volver a activarlo para cada cambio. Si configuras otro repositorio o necesitas repetir la configuración:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\enable-pages.ps1
@@ -50,7 +52,7 @@ Este paso selecciona GitHub Actions como origen de Pages e inicia el workflow `p
 gh run list --repo xisver/xisverso --workflow pages.yml --limit 3
 ```
 
-Cuando la ejecución termine con `success`, el juego estará en:
+Después de subir cambios a `main`, la ejecución más reciente debe terminar con `success` para que esos cambios estén disponibles en:
 
 [https://xisver.github.io/xisverso/](https://xisver.github.io/xisverso/)
 
@@ -58,9 +60,26 @@ La primera subida puede disparar un workflow antes de que Pages esté activado. 
 
 También puedes activar Pages personalmente en GitHub: **Settings → Pages → Build and deployment → Source → GitHub Actions**. Después inicia **Actions → Publicar Xisverso en Pages → Run workflow**, o usa `gh workflow run pages.yml --repo xisver/xisverso --ref main`.
 
+## Variables públicas de Firebase para futuras compilaciones
+
+Las visitas opcionales necesitan que la compilación reciba la configuración pública de la aplicación web Firebase del proyecto `xisverso-xissoft-20261117`, ya configurado localmente. En el repositorio de GitHub se usan estas **Repository variables**, disponibles en **Settings → Secrets and variables → Actions → Variables**, para las futuras compilaciones:
+
+| Variable                    | Valor de la configuración web de Firebase |
+| --------------------------- | ----------------------------------------- |
+| `VITE_FIREBASE_API_KEY`     | `apiKey`                                  |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `authDomain`                              |
+| `VITE_FIREBASE_PROJECT_ID`  | `projectId`                               |
+| `VITE_FIREBASE_APP_ID`      | `appId`                                   |
+
+El paso `npm run build:pages` lee esas variables desde `vars` y Vite las incorpora al cliente. Son datos públicos de configuración; no pongas claves privadas, credenciales de cuentas de servicio ni tokens de administrador en variables `VITE_*`. El acceso a los datos se protege con Firebase Authentication y las reglas de Firestore.
+
+Si faltan las variables, el juego local sigue funcionando y las visitas aparecen sin configurar. Una actualización de variables se aplica en la siguiente compilación; no cambia un sitio ya compilado por sí sola. No se sube `.env.local` al repositorio.
+
+El proyecto **Xisverso** ya existe, con aplicación web, Auth anónima y Firestore Standard gratuito en `nam5`, con facturación desactivada. Las reglas superaron 74 comprobaciones en emulador y `check:firebase` verificó publicación, visita, retirada y limpieza contra el proyecto real sin alterar los recursos del visitante. Esto no actualiza el sitio de Pages: todavía hay que publicar los cambios del cliente con las variables de compilación. La modificación del workflow, por sí sola, no crea recursos ni despliega reglas. Consulta [FIREBASE.md](FIREBASE.md).
+
 ## Actualizaciones posteriores
 
-Tras revisar tus cambios:
+Cuando los cambios revisados estén integrados en `main`:
 
 ```powershell
 git add .
@@ -70,18 +89,22 @@ git push origin main
 
 Cada push a `main` vuelve a compilar y publicar automáticamente. La compilación se entrega como un artefacto de `dist/`; no hay que subir `dist` ni `node_modules` al repositorio.
 
-## Qué se preparó y qué se verificó
+## Comandos de verificación
 
 - `npm.cmd run build:pages` compila con base `/xisverso/`, conservando la dirección local del desarrollo.
 - `.github/workflows/pages.yml` ejecuta las pruebas de simulación, compila el juego, sube solo `dist/` y lo despliega al entorno `github-pages`.
 - `npm.cmd run check:pages` comprueba el HTML generado y sirve la compilación bajo el subdirectorio real `/xisverso/` en un servidor local aislado. Verifica JavaScript, CSS, favicon, cuidado y persistencia con Chrome sin ventana.
-- Los scripts de PowerShell se revisan sintácticamente. Los comandos de creación, autenticación y publicación remota se ejecutarán cuando el propietario los invoque; no están verificados contra una sesión autenticada en este equipo.
+- `npm.cmd run test:firebase-rules` verifica permisos y validación en los emuladores de Auth y Firestore con `demo-xisverso`; requiere Java 21 en `PATH` y no consume cuota remota.
+- `npm.cmd run check:firebase` prueba visitas contra el proyecto real y consume cuota real. Crea dos identidades y una vista temporales, comprueba que la visita conserva identidad e inventario, retira la vista y limpia los datos de prueba.
+- Los scripts de PowerShell permiten repetir la configuración y la publicación mediante GitHub CLI. No es necesario crear de nuevo el repositorio ni volver a habilitar Pages en cada actualización.
+
+El sitio y su workflow existentes no demuestran que los cambios locales nuevos ya estén publicados. Comprueba la ejecución correspondiente al commit que quieres revisar.
 
 No se necesita un token escrito en los archivos del proyecto: GitHub Actions utiliza sus permisos temporales de Pages. Las operaciones locales usan GitHub CLI.
 
 ## Guardados y límites de Pages
 
-El navegador guarda por origen. La partida de `localhost` o `127.0.0.1` permanece allí; entrar a `https://xisver.github.io` crea un guardado independiente. La versión publicada todavía funciona con partidas locales por navegador y no incorpora cuentas, servidor ni convivencia multijugador.
+El navegador guarda por origen. La partida de `localhost` o `127.0.0.1` permanece allí; entrar a `https://xisver.github.io` crea un guardado independiente. Las partidas, inventarios y puntos siguen siendo locales. La nueva integración Firebase, configurada localmente y pendiente de publicar en Pages, comparte vistas de refugios; no añade guardado remoto ni convivencia multijugador.
 
 Si cambias el nombre del repositorio o añades un dominio propio, adapta primero `build:pages`, la URL y los scripts de publicación.
 

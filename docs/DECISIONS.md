@@ -4,52 +4,68 @@ Estas decisiones pueden revisarse con las pruebas del juego.
 
 ## Identidad y plataforma
 
-**Xisverso** combina Xisver y universo. El desarrollo se firma **XisSoft** y el lema inicial es «Un mundo vivo de XisSoft». Se comienza con navegador, TypeScript, Vite y Canvas 2D para compartir una base entre computadora y móvil.
+**Xisverso** combina Xisver y universo. El desarrollo se firma **XisSoft** y el lema es «Un mundo vivo de XisSoft». Navegador, TypeScript, Vite y Canvas 2D comparten una base entre computadora y móvil. La partida y su economía son locales; Firebase añade visitas voluntarias a vistas del refugio.
 
-## Arte procedural e identidad estable
+El repositorio es `xisver/xisverso` y el sitio existente se publica en GitHub Pages. Los cambios de esta iteración requieren validación y publicación para llegar al sitio. La carpeta de este checkout se llama `Xisverso`.
 
-Huevos, cuerpos, rasgos y fondos se construyen con formas y curvas. La semilla y el bioma donde se crea un huevo fijan la identidad visual de esa mascota. Visitar otro lugar cambia el paisaje, no la especie ni su aspecto.
+## Arte procedural, tamaño y profundidad
 
-La etapa de vida puede cambiar tamaño, proporciones y detalles de la criatura. Las evoluciones condicionadas por alimentación se definirán después; por ahora se registra la dieta y el crecimiento sigue un ciclo general de huevo, joven y adulto.
+Huevos, cuerpos, rasgos, decoraciones y fondos se construyen con formas y curvas. La semilla y el bioma de origen fijan la identidad visual. Visitar otro lugar cambia el paisaje, sin transformar a la mascota.
 
-La simulación permanece separada del dibujo. Si se decide incorporar 3D, sus reglas de cuidado, identidad y guardado seguirán siendo aprovechables.
+Cada etapa cambia la estructura: un bebé redondo o flotante, con ojos y sin extremidades; un joven con más detalles y extremidades pequeñas; un adulto completamente formado. El menor tamaño deja más mundo visible. El movimiento se ancla al suelo, ajusta la escala según la profundidad y ordena criaturas y objetos por su posición.
+
+La simulación permanece separada del dibujo. La escena respeta movimiento reducido y conserva alternativas de teclado y táctiles.
 
 Referencias de las APIs utilizadas: [formas en Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Drawing_shapes), [animación](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Basic_animations) y [movimiento reducido](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
 
 ## Elegir el primer compañero
 
-La primera partida ofrece tres huevos visuales —Moteado, Rayado y Estelar— y tres biomas de crianza. Los patrones no conceden ventajas de cuidado ni anticipan ramas de evolución por alimentación; el jugador elige la apariencia y el primer hogar que prefiera.
+La primera partida ofrece tres huevos —Moteado, Rayado y Estelar— y tres biomas. Los patrones son una elección visual, sin ventajas de cuidado ni ramas alimentarias anticipadas.
 
-La elección se confirma una vez, antes de empezar la incubación. Las partidas existentes conservan su identidad y entran directamente al refugio. El esquema de guardado sigue en v2: la semilla preserva el patrón y el bioma de origen conserva los rasgos del lugar de crianza.
+La confirmación inicia la incubación y el guardado. Los borradores no avanzan ni crean partidas parciales. Las partidas existentes conservan identidad y entran directamente al refugio. La semilla mantiene el patrón dentro del esquema v3.
 
-## Crecer y dejar vivir
+## Crecer sin prisas
 
-Un huevo recibe calor, nace como joven y crece hasta adulto. Los tiempos son breves y configurables para probar el ciclo. El adulto se puede dejar libre en el lugar visitado: permanece disponible para visitarlo, convivir y acompañar expediciones. Esto abre la crianza de otro huevo sin borrar al compañero anterior.
+El huevo tarda cinco horas en nacer como bebé; el bebé necesita otras veinte horas para ser joven y el joven tres días para ser adulto. Son duraciones por etapa, con 97 horas acumuladas hasta adulto. El reloj real continúa cuando el juego está cerrado.
 
-Las mascotas libres pertenecen a la partida local. Su interacción inicial sirve para validar compañía dentro de un mismo mundo antes de construir convivencia entre usuarios.
+Cuidados, recetas y minijuegos no saltan esas duraciones. Las caricias permanecen disponibles incluso con el ánimo lleno y no dan vínculo, experiencia ni crecimiento. El vínculo puede aumentar por otros cuidados y actividades.
 
-## Cuidado y cocina
+Al liberar un adulto, permanece en la colección y en el bioma donde se liberó mientras empieza la crianza de otro huevo. Sus apariciones en la escena son ocasionales: ventanas breves de hasta 24 segundos en ciclos de 180 segundos. Estar ausente de la escena no elimina al adulto ni impide seleccionarlo para una expedición.
 
-La escala de **Hambre** expresa necesidad de comer: 0 significa ausencia de hambre y 100 mucha hambre. Energía, higiene y ánimo son bienestar: altos es mejor. Todas permanecen entre 0 y 100 y la ausencia no causa muerte permanente.
+## Bienestar y cocina
 
-La exploración proporciona ingredientes y la cocina los convierte en porciones. Alimentar consume comida preparada, mientras que elegir o transportar una herramienta no gasta recursos. El jugador puede reunir ingredientes aunque su nueva mascota todavía sea un huevo.
+**Apetito** usa 100 para lleno y 0 para mucha hambre. Comer lo aumenta y el tiempo lo reduce. Energía, higiene y ánimo mantienen la misma orientación de bienestar. Todas las necesidades están entre 0 y 100.
 
-## Explorar en grupo
+El deterioro es lento y varía por etapa y bioma. Una ausencia larga limita el deterioro a ocho horas despierto, mientras la edad sigue avanzando durante toda la ausencia. No hay muerte permanente.
 
-El letrero del mundo abre exploraciones. Se pueden invitar hasta tres adultos libres; un grupo mayor consigue más materiales. El bioma, los acompañantes y el resultado previsto se fijan al salir para que cambiar de lugar o recargar no permita modificar el resultado. La recompensa se entrega una vez al reclamarla.
+Alimentar reúne las opciones de Cocinar y Elegir alimento en un menú encima del botón. Elegir o llevar una herramienta no gasta recursos; cocinar descuenta ingredientes y alimentar consume una ración. La dieta se conserva para futuras evoluciones alimentarias, que todavía no están definidas.
 
-## Jugar dentro del refugio
+## Explorar, jugar y decorar
 
-La escena es la pantalla principal. Jóvenes y adultos caminan al tocar el suelo; la mascota responde a herramientas por toque, teclado o arrastre. El bienestar, el crecimiento, los viajes, la colección y la cocina se consultan en diálogos a demanda.
+Las expediciones aceptan hasta tres adultos libres diferentes. Destino, grupo y materiales se fijan al salir para impedir cambios de recompensa al viajar o recargar. Los materiales se reclaman una sola vez al terminar.
 
-## Persistencia y comunidad
+Los seis minijuegos duran 20 segundos y hacen participar a la mascota: buscar luciérnagas, recoger fruta, saltar charcos, bailar, recordar un sendero y empujar una pelota. Puntúan acciones propias de cada actividad. Terminar concede una recompensa local; salir antes no la concede.
 
-El nuevo esquema v2 migra partidas v1 y conserva el respaldo anterior. La mascota previa se mantiene como adulta, el progreso permanece y la antigua saciedad se convierte en hambre.
+Los puntos existentes (`coins`) permiten comprar seis decoraciones. Las compras son atómicas, no se duplican y quedan guardadas. No se incorporan pagos ni dinero real.
 
-La economía local es modificable. Antes de cuentas o clasificaciones se decidirá cómo importar ese progreso; un servidor deberá validar propiedad, recursos y resultados. Las futuras salas serán privadas y pequeñas.
+## Ambiente sonoro
+
+Web Audio genera música ambiental original por bioma y efectos de interacción. No necesita muestras, descargas ni servicios de audio. La música empieza después de una interacción permitida por el navegador.
+
+Música y efectos tienen activación y volumen independientes. Las preferencias persisten localmente y ocultar la página pausa el audio para evitar que siga sonando en segundo plano.
+
+## Persistencia y visitas
+
+El esquema v3 guarda Apetito, la etapa bebé y las decoraciones. La migración v2 conserva etapas y progreso relativo e invierte el hambre para obtener Apetito. La saciedad de v1 ya tiene la orientación correcta y su mascota se mantiene adulta. Se conservan los respaldos anteriores.
+
+Las visitas Firebase comparten manualmente una vista mínima del refugio mediante un código. Auth anónima identifica al propietario y Firestore Lite realiza lecturas puntuales, sin directorio ni listeners permanentes. El dueño puede retirar la vista. El guardado, las necesidades, el inventario y los puntos permanecen locales.
+
+El proyecto `xisverso-xissoft-20261117` utiliza aplicación web registrada, Auth anónima y base Firestore Standard gratuita en `nam5`, con facturación desactivada y sin productos de pago. Las reglas superaron 74 comprobaciones en emulador y el flujo real de publicación, visita y retirada quedó verificado, incluida la conservación de recursos del visitante y la limpieza de los datos e identidades temporales. El cliente continúa local: validar el backend no publica el frontend nuevo en Pages. No hay juego simultáneo ni premios remotos.
+
+La economía local es modificable. Antes de cuentas, clasificaciones o intercambios se decidirá cómo importar progreso; el servidor deberá validar propiedad, recursos y resultados sin confiar en el guardado local.
 
 ## Derechos y decisiones abiertas
 
-Los derechos se reservan a XisSoft. No se incorpora una licencia de código abierto ni un servicio de pago sin una decisión expresa del propietario.
+Los derechos se reservan a XisSoft. No se incorpora una licencia de código abierto, un servicio de pago ni un despliegue público sin instrucciones del propietario.
 
-Quedan abiertos: público y edades, duración definitiva de crianza, ramas de evolución según recetas y dieta, especies, equilibrio de exploración y cocina, infraestructura de cuentas y presupuesto para salas remotas.
+Quedan abiertos público y edades, ramas de evolución según dieta, nuevas especies, equilibrio de juegos y cocina, identidad recuperable, guardado remoto y convivencia en vivo. Cualquier ampliación del alcance gratuito de Firebase deberá respetar sus cuotas y la decisión de no activar facturación.
