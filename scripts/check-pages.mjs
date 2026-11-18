@@ -92,6 +92,13 @@ try {
     .click();
   await expect(page.locator('#kitchen-dialog')).toBeVisible();
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Explorar', exact: true }).click();
+  await expect(page.locator('#start-expedition')).toBeDisabled();
+  await expect(page.locator('#exploration-wait')).toContainText('adulto');
+  const waiting = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
+  assert.equal(waiting.expedition, null);
+  assert.deepEqual(waiting.explorationStarts, []);
+  await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   const restored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
@@ -100,7 +107,7 @@ try {
   assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: recursos, bienvenida, huevo, bioma, caricias sin acelerar, ficha compacta de alimento y guardado v3 funcionan bajo /xisverso/.',
+    'PAGES_OK: recursos, bienvenida, ficha compacta, guardado v3 y exploración reservada al adulto funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();

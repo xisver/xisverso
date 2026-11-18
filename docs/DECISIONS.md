@@ -30,7 +30,7 @@ El huevo tarda cinco horas en nacer como bebé; el bebé necesita otras veinte h
 
 Estos tiempos son reglas internas de diseño. La interfaz muestra etapa y progreso, sin explicar las horas que tarda cada evolución ni mostrar una cuenta atrás.
 
-Cuidados, recetas y minijuegos no saltan esas duraciones. Las caricias permanecen disponibles incluso con el ánimo lleno y no dan vínculo, experiencia ni crecimiento. El vínculo puede aumentar por otros cuidados y actividades.
+Cuidados, recetas y minijuegos no saltan esas duraciones. Las caricias permanecen disponibles incluso con el Ánimo lleno. En mascotas nacidas añaden dos puntos de vínculo solo si el Ánimo previo es menor de 30; al recuperar ese nivel dejan de incrementar el vínculo. Se respeta el máximo de 100. No dan experiencia, puntos ni crecimiento, y acariciar el huevo no añade vínculo. El vínculo también puede aumentar por otros cuidados y actividades.
 
 Al liberar un adulto, permanece en la colección y en el bioma donde se liberó mientras empieza la crianza de otro huevo. Sus apariciones en la escena son ocasionales: ventanas breves de hasta 24 segundos en ciclos de 180 segundos. Estar ausente de la escena no elimina al adulto ni impide seleccionarlo para una expedición.
 
@@ -44,13 +44,13 @@ Alimentar muestra una ficha compacta encima del botón con la receta seleccionad
 
 ## Explorar, jugar y decorar
 
-Las expediciones aceptan hasta tres adultos libres diferentes. Destino, grupo y materiales se fijan al salir para impedir cambios de recompensa al viajar o recargar. Los materiales se reclaman una sola vez al terminar.
+Las expediciones requieren que la mascota principal sea adulta y aceptan hasta tres adultos libres diferentes como acompañantes. La colección de adultos libres no habilita a una mascota principal en una etapa anterior. Destino, grupo y materiales se fijan al salir para impedir cambios de recompensa al viajar o recargar. Los materiales se reclaman una sola vez al terminar.
 
-La partida nueva empieza con cero puntos, cero ingredientes y una ración de bienvenida. Explorar es la única fuente de ingredientes nuevos. El historial `explorationStarts` guarda los dos últimos inicios y permite como máximo dos salidas por ventana móvil de 24 horas, con ocho horas entre inicios. Viajar, recargar o pasar la medianoche no reinicia este límite.
+La partida nueva empieza con cero puntos, cero ingredientes y una ración de bienvenida. Explorar es la única fuente de ingredientes nuevos. El historial `explorationStarts` guarda los dos últimos inicios y permite como máximo dos salidas por día calendario de Ciudad de México, con ocho horas entre inicios. El contador diario se reinicia a medianoche en `America/Mexico_City`; el descanso de ocho horas se mantiene aunque cambie el día. Viajar, recargar o liberar a la mascota no borra el historial.
 
-Los seis minijuegos duran 20 segundos y hacen participar a la mascota: buscar luciérnagas, recoger fruta, saltar charcos, bailar, recordar un sendero y empujar una pelota. Puntúan acciones propias de cada actividad. Completar una partida con aciertos concede entre uno y cinco puntos, sin ingredientes ni comida. Cancelar o terminar sin aciertos no concede puntos.
+Los seis minijuegos duran 20 segundos y hacen participar a la mascota: buscar luciérnagas, recoger fruta, saltar charcos, bailar, recordar un sendero y empujar una pelota. Puntúan acciones propias de cada actividad. Completar una partida con aciertos aumenta el Ánimo y concede entre uno y cinco puntos, sin ingredientes ni comida. Cancelar o terminar sin aciertos no concede puntos.
 
-Los puntos existentes (`coins`) permiten comprar seis decoraciones. Las compras son atómicas, no se duplican y quedan guardadas. No se incorporan pagos ni dinero real.
+Los puntos locales obtenidos en los minijuegos (`coins`) permiten comprar seis decoraciones. Las compras son atómicas, no se duplican y quedan guardadas. No se incorporan pagos ni dinero real.
 
 ## Ambiente sonoro
 

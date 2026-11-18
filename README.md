@@ -11,7 +11,7 @@ Xisverso combina **Xisver + universo**. Es un juego de mascotas originales: incu
 - Acariciar tantas veces como quieras; después de nacer, alimentar, bañar y ayudar a descansar.
 - Dejar libre a un adulto y cuidar otro huevo. Los adultos permanecen en tu colección, pueden acompañar expediciones y aparecen ocasionalmente en su bioma.
 - Viajar entre Bosque Susurro, Costa Nácar y Tundra Aurora conservando el origen y los rasgos de cada mascota.
-- Explorar con hasta tres adultos libres, reunir ingredientes y preparar tres recetas. Puedes hacer dos salidas cada 24 horas, separadas por ocho horas.
+- Explorar cuando tu mascota principal sea adulta, con hasta tres adultos libres como acompañantes, reunir ingredientes y preparar tres recetas. Puedes hacer dos salidas al día, separadas por ocho horas.
 - Jugar seis minijuegos de 20 segundos en los que participa tu mascota.
 - Ganar puntos jugando y comprar seis decoraciones para el mundo, sin dinero real.
 - Escuchar música ambiental propia de cada bioma y efectos de sonido, con controles independientes.
@@ -25,17 +25,17 @@ Toca el huevo para darle cariño. Cuando nazca, toca el suelo para caminar y eli
 
 Pulsa el nombre de tu compañero para consultar **Apetito**, energía, higiene, ánimo y crecimiento. Comer recupera Apetito; el tiempo lo reduce lentamente.
 
-Tu mascota sigue creciendo incluso con el juego cerrado. Las caricias siguen disponibles con el ánimo lleno y no aumentan vínculo, experiencia ni crecimiento. Las necesidades bajan lentamente según la etapa y el bioma, sin muerte permanente.
+Tu mascota sigue creciendo incluso con el juego cerrado. Las caricias siguen disponibles con el Ánimo lleno. Solo aumentan el vínculo cuando el Ánimo está bajo; no dan experiencia ni adelantan el crecimiento. Las necesidades bajan lentamente según la etapa y el bioma, sin muerte permanente.
 
 El bebé es una pequeña forma redonda o flotante con ojos y sin extremidades. El joven desarrolla más rasgos y extremidades pequeñas; el adulto tiene su estructura completa. La mascota ocupa menos pantalla y cambia de escala según la profundidad al caminar. Las mascotas libres aparecen en visitas breves de hasta 24 segundos por ciclo de 180 segundos; la colección sigue disponible aunque no estén en la escena.
 
-El letrero **Explorar** inicia una salida y permite recoger los materiales al terminar. Es la única fuente de ingredientes nuevos; el panel muestra las salidas disponibles y la espera hasta la siguiente. La cocina muestra ingredientes, recetas y raciones. La dieta se registra, pero todavía no decide ramas de evolución ni cambios de aspecto.
+El letrero **Explorar** permite salir cuando tu mascota principal sea adulta y recoger los materiales al terminar. Tener adultos libres en la colección no habilita la exploración de un compañero que aún está creciendo. Es la única fuente de ingredientes nuevos; el panel muestra las salidas disponibles y la espera hasta la siguiente. El contador diario se reinicia a medianoche de Ciudad de México, y la espera de ocho horas entre inicios continúa aunque cambie el día. La cocina muestra ingredientes, recetas y raciones. La dieta se registra, pero todavía no decide ramas de evolución ni cambios de aspecto.
 
 ## Juegos, puntos y sonido
 
-**Jugar** ofrece Luciérnagas en compañía, Lluvia de frutas, Salta los charcos, Baile del bosque, Sendero de recuerdos y Pelota al claro. Tu mascota recoge, salta, baila, recuerda o empuja según el juego. Cada sesión dura 20 segundos; completar una partida con aciertos entrega entre 1 y 5 puntos, una sola vez. Salir antes no concede premios ni ingredientes. El huevo podrá participar después de nacer.
+**Jugar** ofrece Luciérnagas en compañía, Lluvia de frutas, Salta los charcos, Baile del bosque, Sendero de recuerdos y Pelota al claro. Tu mascota recoge, salta, baila, recuerda o empuja según el juego. Cada sesión dura 20 segundos; completar una partida con aciertos recupera Ánimo y entrega entre 1 y 5 puntos, una sola vez. Salir antes no concede premios ni ingredientes. El huevo podrá participar después de nacer.
 
-Las partidas nuevas empiezan sin puntos y con una ración preparada de bienvenida. Los puntos permiten comprar un jardín de flores, un farol, setas luminosas, un banco, una fuente y un arco. Las compras se guardan, no se duplican y sus elementos aparecen en el mundo. No hay compras con dinero real.
+Las partidas nuevas empiezan sin puntos ni ingredientes y con una ración preparada de bienvenida. Los puntos obtenidos en los minijuegos permiten comprar un jardín de flores, un farol, setas luminosas, un banco, una fuente y un arco. Las compras se guardan, no se duplican y sus elementos aparecen en el mundo. No hay compras con dinero real.
 
 La música ambiental combina piano suave, frases espaciadas y una reverberación ligera. Es una composición original generada con Web Audio, al igual que los efectos, sin descargar pistas ni usar servicios externos. El navegador inicia el audio después de una interacción. Puedes activar o silenciar música y efectos por separado y ajustar sus volúmenes; las preferencias se conservan y el audio se pausa al ocultar la página.
 

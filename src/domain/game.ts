@@ -217,8 +217,15 @@ export const LIFECYCLE = {
 export const EXPEDITION_SECONDS = 20;
 export const EXPEDITION_COOLDOWN_HOURS = 8;
 export const EXPEDITIONS_PER_DAY = 2;
-export const EXPLORATION_WINDOW_HOURS = 24;
+export const EXPLORATION_TIME_ZONE = 'America/Mexico_City';
 const HOUR = 3_600_000;
+const MAX_DATE = 8_640_000_000_000_000;
+const explorationCalendar = new Intl.DateTimeFormat('en-CA', {
+  timeZone: EXPLORATION_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 export const MAX_OFFLINE_HOURS = 8;
 export const XP_PER_LEVEL = 100;
 export const CARE_COSTS: Readonly<Record<Action, number>> = { feed: 0, clean: 0, rest: 0, pet: 0 };
@@ -424,6 +431,7 @@ export function applyCare(state: GameState, action: Action, now = Date.now()): C
       message: 'Un poquito de calor. El huevo nacerá a su propio ritmo.',
     };
   }
+  const needsComfort = action === 'pet' && next.pet.needs.joy < 30;
   if (action === 'feed') {
     if (next.pet.needs.appetite >= 98)
       return {
@@ -453,11 +461,13 @@ export function applyCare(state: GameState, action: Action, now = Date.now()): C
       };
     next.pet.needs[definition.need] = clamp(next.pet.needs[definition.need] + definition.gain);
   }
-  // Affection remains available at full joy, without farming bond or progression.
+  // Affection remains available at full joy. Only a genuinely low mood builds bond.
   if (action !== 'pet') {
     next.pet.bond = clamp(next.pet.bond + 2);
     next.activities = Math.min(MAX_COUNTER, next.activities + 1);
     grantExperience(next, 5);
+  } else if (needsComfort) {
+    next.pet.bond = clamp(next.pet.bond + 2);
   }
   return {
     state: next,
@@ -589,10 +599,34 @@ function expeditionRewards(
   result.herb = factor;
   return result;
 }
+function explorationDay(timestamp: number): string {
+  return explorationCalendar.format(Math.min(timestamp, MAX_DATE));
+}
+
+/** Find the local date boundary without relying on the host's timezone or a fixed offset. */
+function nextExplorationDay(timestamp: number): number {
+  if (timestamp >= MAX_DATE) return Number.MAX_SAFE_INTEGER;
+  const today = explorationDay(timestamp);
+  let lower = timestamp;
+  let upper = Math.min(MAX_DATE, timestamp + 48 * HOUR);
+  if (explorationDay(upper) === today) return Number.MAX_SAFE_INTEGER;
+  while (upper - lower > 1) {
+    const middle = lower + Math.floor((upper - lower) / 2);
+    if (explorationDay(middle) === today) lower = middle;
+    else upper = middle;
+  }
+  return upper;
+}
+
 export function getExplorationAvailability(
   state: GameState,
   now = Date.now(),
-): { remaining: number; nextAvailableAt: number; canStart: boolean } {
+): {
+  remaining: number;
+  nextAvailableAt: number;
+  canStart: boolean;
+  reason: 'stage' | 'pending' | 'daily-limit' | 'cooldown' | null;
+} {
   const timestamp = Math.max(state.lastUpdated, normalizeNow(now, state.lastUpdated));
   const starts = [
     ...new Set([
@@ -600,26 +634,34 @@ export function getExplorationAvailability(
       ...(state.expedition ? [state.expedition.startedAt] : []),
     ]),
   ].sort((a, b) => a - b);
-  const recent = starts.filter(
-    (startedAt) => startedAt > timestamp - EXPLORATION_WINDOW_HOURS * HOUR,
-  );
-  const remaining = Math.max(0, EXPEDITIONS_PER_DAY - recent.length);
+  const today = explorationDay(timestamp);
+  const departuresToday = starts.filter((startedAt) => explorationDay(startedAt) === today);
+  const remaining = Math.max(0, EXPEDITIONS_PER_DAY - departuresToday.length);
   const lastDeparture = starts.at(-1);
   const cooldownEnds =
     lastDeparture === undefined
       ? timestamp
       : Math.min(Number.MAX_SAFE_INTEGER, lastDeparture + EXPEDITION_COOLDOWN_HOURS * HOUR);
-  const nextSlot = remaining
-    ? timestamp
-    : Math.min(
-        Number.MAX_SAFE_INTEGER,
-        recent[recent.length - EXPEDITIONS_PER_DAY] + EXPLORATION_WINDOW_HOURS * HOUR,
-      );
+  const nextSlot = remaining ? timestamp : nextExplorationDay(timestamp);
   const nextAvailableAt = Math.max(timestamp, cooldownEnds, nextSlot);
+  const effectiveAge = Math.min(
+    MAX_COUNTER,
+    state.pet.growthSeconds + (timestamp - state.lastUpdated) / 1000,
+  );
+  const reason = state.expedition
+    ? 'pending'
+    : stageFor(effectiveAge) !== 'adult'
+      ? 'stage'
+      : remaining === 0
+        ? 'daily-limit'
+        : nextAvailableAt > timestamp
+          ? 'cooldown'
+          : null;
   return {
     remaining,
     nextAvailableAt,
-    canStart: !state.expedition && remaining > 0 && nextAvailableAt <= timestamp,
+    canStart: reason === null,
+    reason,
   };
 }
 export function startExpedition(
@@ -633,6 +675,12 @@ export function startExpedition(
       state: next,
       success: false,
       message: 'Ya hay una exploración en marcha o pendiente de recoger.',
+    };
+  if (next.pet.stage !== 'adult')
+    return {
+      state: next,
+      success: false,
+      message: 'Tu mascota principal debe ser adulta para salir de exploración.',
     };
   if (
     !Array.isArray(companionIds) ||
@@ -651,8 +699,8 @@ export function startExpedition(
       state: next,
       success: false,
       message:
-        availability.remaining === 0
-          ? 'Ya realizaste las dos exploraciones disponibles. Tu equipo volverá a salir cuando se libere una plaza.'
+        availability.reason === 'daily-limit'
+          ? 'Ya realizaste las dos exploraciones de hoy. Las salidas se renuevan al empezar un nuevo día.'
           : 'Tu equipo necesita descansar antes de otra exploración.',
     };
   if (next.lastUpdated > Number.MAX_SAFE_INTEGER - EXPEDITION_SECONDS * 1000)

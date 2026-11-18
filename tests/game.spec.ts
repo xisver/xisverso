@@ -141,15 +141,38 @@ test('las caricias siguen funcionando con ánimo lleno sin generar vínculo ni c
   await page.clock.install({ time: new Date(initial.lastUpdated) });
   await seedState(page, initial);
   await gotoGame(page);
-  await touchPet(page);
-  await page.clock.runFor(900);
-  await touchPet(page);
+  const eventsBefore = await page.locator('#journal-events .journal-event').count();
+  await page.locator('#pet-interact').focus();
+  for (let index = 0; index < 3; index++) await page.keyboard.press('Enter');
+  await expect(page.locator('#journal-events .journal-event')).toHaveCount(eventsBefore + 3);
   const after = await readState(page);
   expect(after.pet.bond).toBe(initial.pet.bond);
   expect(after.xp).toBe(initial.xp);
   expect(after.coins).toBe(initial.coins);
   expect(after.pet.growthSeconds - initial.pet.growthSeconds).toBeLessThan(3);
   await expect(page.locator('#pet-thought')).toContainText('Contigo');
+});
+
+test('acariciar con ánimo bajo mejora el vínculo una vez y luego permite seguir sin acumularlo', async ({
+  page,
+}) => {
+  const initial = bornState('baby');
+  initial.pet.needs.joy = 29;
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await touchPet(page);
+  const comforted = await readState(page);
+  expect(comforted.pet.needs.joy).toBeGreaterThan(50);
+  expect(comforted.pet.bond).toBe(initial.pet.bond + 2);
+  expect(comforted.xp).toBe(initial.xp);
+  expect(comforted.coins).toBe(initial.coins);
+  await touchPet(page);
+  const repeated = await readState(page);
+  expect(repeated.pet.needs.joy).toBeGreaterThan(comforted.pet.needs.joy);
+  expect(repeated.pet.bond).toBe(comforted.pet.bond);
+  expect(repeated.xp).toBe(initial.xp);
+  expect(repeated.coins).toBe(initial.coins);
 });
 test('comer aumenta Apetito y consume una porción, sin cobrar puntos al elegir la herramienta', async ({
   page,
@@ -330,10 +353,33 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
   expect((await readState(page)).expedition).toBeNull();
 });
 
-test('las exploraciones conservan la espera de ocho horas y el límite móvil al recargar', async ({
+for (const stage of ['egg', 'baby', 'young'] as const) {
+  test(`la mascota principal ${stage} no puede explorar aunque tenga adultos libres`, async ({
+    page,
+  }) => {
+    const initial = bornState(stage, 3);
+    await seedState(page, initial);
+    await gotoGame(page);
+    await page.getByRole('button', { name: 'Explorar', exact: true }).click();
+    await expect(page.locator('#start-expedition')).toBeDisabled();
+    await expect(page.locator('#explore-dialog')).toContainText(/adult/i);
+    await page.reload();
+    await page.getByRole('button', { name: 'Explorar', exact: true }).click();
+    await expect(page.locator('#start-expedition')).toBeDisabled();
+    const saved = await readState(page);
+    expect(saved.pet.stage).toBe(stage);
+    expect(saved.freePets).toHaveLength(3);
+    expect(saved.expedition).toBeNull();
+    expect(saved.explorationStarts).toHaveLength(0);
+  });
+}
+
+test('el adulto conserva la espera de ocho horas y el límite diario al recargar', async ({
   page,
 }) => {
-  const initial = createGame();
+  const initial = bornState('adult');
+  // A game day starts at midnight in the configured Mexico City calendar.
+  initial.lastUpdated = Date.parse('2026-11-18T06:00:00.000Z');
   await page.clock.install({ time: new Date(initial.lastUpdated) });
   await seedState(page, initial);
   await gotoGame(page);
@@ -366,9 +412,9 @@ test('las exploraciones conservan la espera de ocho horas y el límite móvil al
   await page.getByRole('button', { name: 'Explorar', exact: true }).click();
   await expect(page.locator('#start-expedition')).toBeDisabled();
   const afterSecond = await page.evaluate(() => Date.now());
-  await page.clock.fastForward(firstStart + 24 * 3600000 + 1000 - afterSecond);
+  await page.clock.fastForward(Date.parse('2026-11-19T06:00:01.000Z') - afterSecond);
   await expect(page.locator('#start-expedition')).toBeEnabled();
-  await expect(page.locator('#exploration-remaining')).toContainText('1');
+  await expect(page.locator('#exploration-remaining')).toContainText('2');
 });
 
 test('el huevo espera a nacer antes de jugar las seis aventuras', async ({ page }) => {
@@ -383,10 +429,13 @@ test('el huevo espera a nacer antes de jugar las seis aventuras', async ({ page 
     await expect(button).toBeDisabled();
 });
 
-test('las luciérnagas cuentan al llegar la mascota y terminar entrega puntos una sola vez', async ({
+test('jugar sube el ánimo y entrega puntos una sola vez que permiten comprar decoración', async ({
   page,
 }) => {
   const initial = bornState('baby');
+  // Previous savings plus this completed round must unlock the first decoration.
+  initial.coins = 39;
+  initial.pet.needs.joy = 40;
   await page.clock.install({ time: new Date(initial.lastUpdated) });
   await seedState(page, initial);
   await gotoGame(page);
@@ -412,18 +461,30 @@ test('las luciérnagas cuentan al llegar la mascota y terminar entrega puntos un
   expect(reward).toBeGreaterThanOrEqual(1);
   expect(reward).toBeLessThanOrEqual(5);
   expect(completed.inventory).toEqual(initial.inventory);
+  expect(completed.pet.needs.joy).toBeGreaterThan(initial.pet.needs.joy);
   await expect(page.locator('#game-result')).toContainText(`+${reward} puntos`);
   await page.clock.fastForward(1000);
   expect((await readState(page)).coins).toBe(completed.coins);
   await page.getByRole('button', { name: 'Volver al refugio', exact: true }).click();
   await page.reload();
   expect((await readState(page)).coins).toBe(completed.coins);
+  await page.getByRole('button', { name: 'Menú', exact: true }).click();
+  await page.getByRole('button', { name: 'Decoraciones', exact: true }).click();
+  await page.locator('[data-buy-decoration="flowers"]').click();
+  const decorated = await readState(page);
+  expect(decorated.decorations).toContain('flowers');
+  expect(decorated.coins).toBe(completed.coins - 40);
+  expect(decorated.inventory).toEqual(initial.inventory);
+  await page.reload();
+  expect((await readState(page)).decorations).toContain('flowers');
+  expect((await readState(page)).coins).toBe(decorated.coins);
 });
 
 for (const kind of ['fruit', 'puddles', 'rhythm', 'memory', 'ball'] as const) {
   test(`la mascota consigue un acierto en ${kind}; salir antes no entrega puntos`, async ({
     page,
   }) => {
+    if (kind === 'puddles') await page.clock.install({ time: new Date() });
     await page.addInitScript(() => {
       Math.random = () => 0.5;
     });
@@ -435,14 +496,20 @@ for (const kind of ['fruit', 'puddles', 'rhythm', 'memory', 'ball'] as const) {
     if (kind === 'fruit') {
       await expect(page.locator('#game-score')).not.toHaveText('0', { timeout: 7000 });
     } else if (kind === 'puddles') {
-      await expect
-        .poll(async () => Number(await field.getAttribute('data-puddle-x')), {
-          intervals: [50],
-          timeout: 7000,
-        })
-        .toBeLessThan(0.49);
+      // Freeze the browser clock before targeting the jump. CI latency must not
+      // move the puddle between observing it and pressing the jump button.
+      const pauseAt = await page.evaluate(() => Date.now() + 100);
+      await page.clock.pauseAt(new Date(pauseAt));
+      for (let step = 0; step < 35; step++) {
+        if (Number(await field.getAttribute('data-puddle-x')) <= 0.47) break;
+        await page.clock.runFor(100);
+      }
+      const puddleX = Number(await field.getAttribute('data-puddle-x'));
+      expect(puddleX).toBeGreaterThan(0.41);
+      expect(puddleX).toBeLessThanOrEqual(0.47);
       await page.getByRole('button', { name: 'Saltar', exact: true }).click();
-      await expect(page.locator('#game-score')).toHaveText('1', { timeout: 3000 });
+      await page.clock.runFor(650);
+      await expect(page.locator('#game-score')).toHaveText('1');
     } else if (kind === 'rhythm') {
       await expect
         .poll(async () => Number(await field.getAttribute('data-rhythm-phase')), {

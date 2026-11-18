@@ -182,7 +182,7 @@ app.innerHTML = `
   <dialog id="shop-dialog" class="sheet-dialog shop-dialog" aria-labelledby="shop-title"><button class="dialog-close" data-close="shop-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UN REFUGIO MÁS TUYO</span><h2 id="shop-title">Pequeños tesoros.</h2><p class="muted">Gana puntos jugando con tu mascota. Tus decoraciones acompañan al refugio en todos los biomas.</p><p class="shop-wallet"><strong id="shop-points">0</strong> puntos disponibles</p><div id="decoration-list" class="decoration-list"></div><p class="muted small-note">Los puntos se ganan dentro del juego. No hay compras con dinero real.</p></dialog>
   <dialog id="food-dialog" class="sheet-dialog" aria-labelledby="food-title"><button class="dialog-close" data-close="food-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">ALGO RICO PARA SU PANCITA</span><h2 id="food-title">Elegir alimento</h2><p class="muted">Elige una ración y después toca a tu mascota para alimentarla.</p><div id="food-choice-list" class="prepared-food"></div><button class="secondary-button" data-open="kitchen-dialog">Cocinar más raciones</button></dialog>
   <dialog id="games-dialog" class="sheet-dialog games-dialog" aria-labelledby="games-title"><button class="dialog-close" data-close="games-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">SEIS AVENTURAS EN COMPAÑÍA</span><h2 id="games-title">¿A qué jugamos?</h2><p id="games-notice" class="muted"></p><div id="minigame-list" class="minigame-list"></div></dialog>
-  <dialog id="explore-dialog" class="sheet-dialog explore-dialog" aria-labelledby="explore-title"><button class="dialog-close" data-close="explore-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UNA SALIDA EN COMPAÑÍA</span><h2 id="explore-title">Explorar y descubrir</h2><p id="explore-location" class="muted"></p><div class="exploration-limits"><strong id="exploration-remaining" title="Máximo dos exploraciones cada 24 horas"></strong><span id="exploration-wait" hidden></span></div><div id="expedition-setup"><p class="section-description">Recoge ingredientes para preparar comida. Puedes invitar hasta tres de tus mascotas libres; cada acompañante aumenta la cosecha.</p><div id="expedition-party" class="expedition-party"></div><p id="party-count" class="party-count">0/3 acompañantes · Cosecha ×1</p><button id="start-expedition" class="primary-button">Salir a explorar ${icon('compass')}</button></div><div id="expedition-progress" class="expedition-journey" hidden><span class="journey-icon">${icon('compass')}</span><h3 id="expedition-caption">Recorriendo el sendero</h3><p><strong id="expedition-time">20</strong> <span id="expedition-unit">segundos para volver</span></p><div class="journey-track"><span id="expedition-fill"></span></div><p id="expedition-team" class="muted"></p><button id="claim-expedition" class="primary-button" disabled>Recoger materiales ${icon('bag')}</button></div><div id="explore-rewards" class="explore-rewards" role="status"></div></dialog>
+  <dialog id="explore-dialog" class="sheet-dialog explore-dialog" aria-labelledby="explore-title"><button class="dialog-close" data-close="explore-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UNA SALIDA EN COMPAÑÍA</span><h2 id="explore-title">Explorar y descubrir</h2><p id="explore-location" class="muted"></p><div class="exploration-limits"><strong id="exploration-remaining" title="Dos exploraciones al día · Reinicio a medianoche de Ciudad de México"></strong><span id="exploration-wait" hidden></span></div><div id="expedition-setup"><p class="section-description">Recoge ingredientes para preparar comida. Puedes invitar hasta tres de tus mascotas libres; cada acompañante aumenta la cosecha.</p><div id="expedition-party" class="expedition-party"></div><p id="party-count" class="party-count">0/3 acompañantes · Cosecha ×1</p><button id="start-expedition" class="primary-button">Salir a explorar ${icon('compass')}</button></div><div id="expedition-progress" class="expedition-journey" hidden><span class="journey-icon">${icon('compass')}</span><h3 id="expedition-caption">Recorriendo el sendero</h3><p><strong id="expedition-time">20</strong> <span id="expedition-unit">segundos para volver</span></p><div class="journey-track"><span id="expedition-fill"></span></div><p id="expedition-team" class="muted"></p><button id="claim-expedition" class="primary-button" disabled>Recoger materiales ${icon('bag')}</button></div><div id="explore-rewards" class="explore-rewards" role="status"></div></dialog>
   <dialog id="kitchen-dialog" class="sheet-dialog kitchen-dialog" aria-labelledby="kitchen-title"><button class="dialog-close" data-close="kitchen-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">DE LA EXPLORACIÓN A SU PANCITA</span><h2 id="kitchen-title">Cocina y mochila</h2><p class="muted">Prepara una ración y llévasela a tu compañero. Su alimentación queda registrada para las futuras evoluciones.</p><h3 class="small-heading">Tus ingredientes</h3><div id="material-inventory" class="material-inventory"></div><h3 class="small-heading">Para cocinar</h3><div id="recipe-list" class="recipe-list"></div><h3 class="small-heading">Comida preparada</h3><div id="prepared-food" class="prepared-food"></div></dialog>
   <dialog id="sanctuary-dialog" class="sheet-dialog sanctuary-dialog" aria-labelledby="sanctuary-title"><button class="dialog-close" data-close="sanctuary-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">UNA FAMILIA QUE SIGUE CRECIENDO</span><h2 id="sanctuary-title">Mis mascotas</h2><p class="muted">Los adultos que dejas libres conservan su hogar. Visítalos, jueguen juntos o invítalos a explorar.</p><div class="collection-summary"><span id="free-pet-count">0</span> mascotas libres</div><div id="sanctuary-list" class="sanctuary-list"></div></dialog>
   <dialog id="release-dialog" class="sheet-dialog" aria-labelledby="release-title"><button class="dialog-close" data-close="release-dialog" aria-label="Cerrar">${icon('close')}</button><span class="eyebrow">SU PROPIA AVENTURA</span><h2 id="release-title">Un hogar en libertad</h2><p id="release-description" class="section-description"></p><p class="muted">Podrás seguir visitándole, jugar juntos e invitarle a explorar. Un nuevo huevo empezará su crianza en el bioma que estás visitando.</p><button id="confirm-release" class="primary-button">Dejar libre y cuidar otro huevo ${icon('leaf')}</button></dialog>
@@ -300,7 +300,7 @@ function renderShop() {
 function renderGames() {
   const egg = state.pet.stage === 'egg';
   $('#games-notice').textContent = egg
-    ? 'Las aventuras empiezan cuando nazca tu bebé. Mientras tanto puedes explorar, cocinar y decorar su mundo.'
+    ? 'Las aventuras empiezan cuando nazca tu bebé. Mientras tanto, acompaña a tu huevo.'
     : 'Tu mascota participa en cada aventura. Completa una partida para ganar puntos y decorar el refugio.';
   $('#minigame-list').innerHTML = MINI_GAMES.map(
     (game) =>
@@ -700,7 +700,7 @@ function renderExplore() {
             `<label class="companion-option"><input type="checkbox" data-companion="${pet.id}" value="${pet.id}" ${selectedCompanions.has(pet.id) ? 'checked' : ''}/><span class="companion-avatar ${pet.biome}">${icon({ forest: 'leaf', coast: 'wave', tundra: 'mountain' }[pet.biome])}</span><span class="companion-meta"><strong>${escapeHtml(pet.name)}</strong><small>Vive en ${biomeName(pet.habitatBiome)}</small></span></label>`,
         )
         .join('')
-    : '<p class="empty-state">Cuando uno de tus adultos viva libre, podrás invitarlo. Mientras tanto, puedes explorar y encontrar ingredientes por tu cuenta.</p>';
+    : '<p class="empty-state">Cuando tu compañero principal sea adulto podrá explorar por su cuenta e invitar a los adultos libres de tu colección.</p>';
   updatePartySelection();
   updateExpeditionStatus();
 }
@@ -709,10 +709,12 @@ function updateExpeditionStatus() {
   const now = Date.now();
   const availability = getExplorationAvailability(state, now);
   $('#exploration-remaining').textContent =
-    `${availability.remaining}/${EXPEDITIONS_PER_DAY} salidas disponibles`;
+    `${availability.remaining}/${EXPEDITIONS_PER_DAY} salidas de hoy`;
   const wait = $('#exploration-wait');
   wait.hidden = Boolean(expedition) || availability.canStart;
-  if (!wait.hidden) {
+  if (!wait.hidden && availability.reason === 'stage') {
+    wait.textContent = 'Tu compañero principal debe ser adulto para explorar.';
+  } else if (!wait.hidden) {
     const minutes = Math.max(1, Math.ceil((availability.nextAvailableAt - now) / 60000));
     const hours = Math.floor(minutes / 60);
     wait.textContent = `Próxima salida en ${hours ? `${hours} h ` : ''}${minutes % 60} min`;
@@ -723,7 +725,9 @@ function updateExpeditionStatus() {
   if (!expedition) {
     $('#explore-sign-label').textContent = availability.canStart
       ? 'Explorar'
-      : 'Explorar más tarde';
+      : availability.reason === 'stage'
+        ? 'Exploración de adultos'
+        : 'Explorar más tarde';
     return;
   }
   const remaining = Math.max(0, Math.ceil((expedition.endsAt - now) / 1000));
@@ -885,8 +889,10 @@ function interactWithPet(tool: SceneTool = selectedTool) {
 }
 function care(action: Action) {
   if (needsOnboarding) return;
-  if (performance.now() - lastCare < 850) return;
-  lastCare = performance.now();
+  if (action !== 'pet') {
+    if (performance.now() - lastCare < 850) return;
+    lastCare = performance.now();
+  }
   reconcileSavedState();
   const result = applyCare(state, action, Date.now());
   state = result.state;
@@ -1386,7 +1392,7 @@ setInterval(() => {
               '¿Qué habrá al final del sendero?',
               'Qué bonito es estar aquí contigo.',
               '¿Has visto las lucecitas?',
-              '¡Podría explorar todo el día!',
+              '¡Podría pasear todo el día!',
             ][Math.floor(Math.random() * 4)],
     4500,
   );

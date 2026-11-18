@@ -31,7 +31,7 @@ Si no hay una partida v3 válida ni respaldos v2 o v1 recuperables, la interfaz 
 
 La etapa se deriva de `growthSeconds`: huevo durante 18 000 segundos, bebé durante los siguientes 72 000 y joven durante los siguientes 259 200. La etapa adulta comienza a las 97 horas acumuladas. Estas duraciones siguen siendo reglas internas. `getLifeProgress` expone el progreso relativo, el tiempo restante y la siguiente etapa; la interfaz muestra etapa y porcentaje, sin horas restantes ni explicaciones de cuánto tarda la evolución.
 
-El crecimiento usa todo el tiempo real transcurrido, también con el juego cerrado. Comida, cuidados y juegos no añaden segundos de crecimiento. Las caricias siempre se aceptan, incluso con el ánimo lleno, y no producen vínculo, XP ni progreso adicional. Los relojes atrasados o inválidos no rejuvenecen ni restauran necesidades.
+El crecimiento usa todo el tiempo real transcurrido, también con el juego cerrado. Comida, cuidados y juegos no añaden segundos de crecimiento. Las caricias siempre se aceptan, incluso con el Ánimo lleno. En mascotas nacidas añaden dos puntos de vínculo solo si el Ánimo anterior al cuidado es menor de 30, respetando el máximo de 100. A partir de 30 no añaden vínculo, aunque el cuidado se acepta y recupera Ánimo. Nunca entregan XP, puntos ni progreso adicional; el huevo conserva su interacción de calor sin añadir vínculo. Los relojes atrasados o inválidos no rejuvenecen ni restauran necesidades.
 
 Al liberar un adulto se conserva en `freePets` y se crea un huevo con una identidad nueva en el bioma actual. El dominio rechaza liberar etapas anteriores, duplicar adultos o liberar mientras haya una expedición pendiente de liquidar.
 
@@ -45,15 +45,15 @@ Cocinar verifica todos los ingredientes y los consume de manera atómica. Alimen
 
 Una partida nueva empieza con cero puntos y cero ingredientes, además de una ración de bienvenida. Los guardados anteriores conservan los recursos que ya tenían. Los ingredientes nuevos proceden únicamente de explorar; los minijuegos no entregan materiales ni comida.
 
-`coins` representa los puntos locales. Completar un minijuego con al menos un acierto entrega entre uno y cinco puntos; una partida sin aciertos o cancelada no da puntos. `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
+`coins` representa los puntos locales. Completar un minijuego con al menos un acierto recupera Ánimo y entrega entre uno y cinco puntos; una partida sin aciertos o cancelada no da puntos. `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
 
 ## Exploraciones persistentes
 
 Una expedición conserva ID, bioma de salida, horas inicial y final, hasta tres adultos libres diferentes y sus materiales previstos. La recompensa y el grupo se fijan al salir. Viajar o recargar no cambia esos datos ni reinicia el reloj. Solo se reclama después de terminar y una sola vez.
 
-`explorationStarts` conserva los dos últimos inicios de expedición. `getExplorationAvailability` permite un máximo de dos salidas en una ventana móvil de 24 horas y exige ocho horas entre sus inicios. El límite pertenece a la partida, se conserva al recargar y no se reinicia al viajar ni al cambiar de día. Una expedición en marcha o pendiente de reclamar también impide iniciar otra.
+`explorationStarts` conserva los dos últimos inicios de expedición. `getExplorationAvailability` exige que la mascota principal sea adulta y permite un máximo de dos salidas por día calendario de `America/Mexico_City`, con ocho horas entre inicios. El contador se reinicia a medianoche de Ciudad de México; la espera de ocho horas conserva el último inicio y puede cruzar esa medianoche. Recargar, viajar o liberar una mascota no elimina el historial. Una expedición en marcha o pendiente de reclamar también impide iniciar otra.
 
-Se permite explorar con un huevo para reunir ingredientes antes de que nazca. Las expediciones y su economía pertenecen a la partida local y no son resultados validados por un servidor.
+Un huevo, un bebé o un joven no pueden iniciar una expedición, aunque haya adultos libres disponibles. La madurez de la mascota principal se reconcilia con el reloj antes de validar la salida. Las expediciones legítimas de guardados anteriores se conservan y pueden reclamarse. Las expediciones y su economía pertenecen a la partida local y no son resultados validados por un servidor.
 
 ## Guardados y migración
 
@@ -82,7 +82,7 @@ El huevo no camina; bebés, jóvenes y adultos pueden seguir un destino. El bot�
 
 Las sesiones duran 20 segundos. Luciérnagas en compañía exige que la mascota llegue a la luz; Lluvia de frutas usa la posición de la mascota para recoger; Salta los charcos comprueba el salto; Baile del bosque comprueba dirección y compás; Sendero de recuerdos comprueba una secuencia que la mascota recorre; Pelota al claro usa contacto y empuje hacia una meta.
 
-La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola vez al terminar. La recompensa se limita a uno a cinco puntos y no añade ingredientes ni raciones. Salir antes o terminar sin aciertos no entrega puntos. Un huevo espera a nacer para jugar. Cada actividad mantiene controles táctiles y alternativas de teclado; no se valida una recompensa por un simple cambio de contador visual.
+La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola vez al terminar. La recompensa recupera Ánimo, se limita a uno a cinco puntos y no añade ingredientes ni raciones. Salir antes o terminar sin aciertos no entrega puntos. Un huevo espera a nacer para jugar. Cada actividad mantiene controles táctiles y alternativas de teclado; no se valida una recompensa por un simple cambio de contador visual.
 
 ## Sonido
 

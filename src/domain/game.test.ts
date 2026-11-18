@@ -13,6 +13,7 @@ import {
   EXPEDITION_SECONDS,
   EXPEDITION_COOLDOWN_HOURS,
   EXPEDITIONS_PER_DAY,
+  EXPLORATION_TIME_ZONE,
   getExplorationAvailability,
   MAX_OFFLINE_HOURS,
   createGame,
@@ -42,6 +43,12 @@ const ADULT_SECONDS = YOUNG_SECONDS + LIFECYCLE.youngSeconds;
 const baby = () => advanceTime(createGame(NOW), NOW + LIFECYCLE.eggSeconds * 1000);
 const young = () => advanceTime(createGame(NOW), NOW + YOUNG_SECONDS * 1000);
 const adult = () => advanceTime(createGame(NOW), NOW + ADULT_SECONDS * 1000);
+function adultAt(timestamp: number): GameState {
+  const state = createGame(timestamp);
+  state.pet.stage = 'adult';
+  state.pet.growthSeconds = ADULT_SECONDS;
+  return state;
+}
 function collection(count: number): GameState {
   let state = adult();
   for (let index = 0; index < count; index++) {
@@ -301,8 +308,8 @@ test('up to three companions increase materials and lock the destination and par
 });
 
 test('exploration materials arrive after the timer, survive reload and can be claimed once', () => {
-  const state = startExpedition(createGame(NOW), [], NOW).state;
-  assert.equal(state.pet.stage, 'egg');
+  const state = startExpedition(adultAt(NOW), [], NOW).state;
+  assert.equal(state.pet.stage, 'adult');
   const early = completeExpedition(state, NOW + EXPEDITION_SECONDS * 1000 - 1);
   assert.equal(early.success, false);
   assert.deepEqual(early.state.inventory, state.inventory);
@@ -325,7 +332,7 @@ test('exploration materials arrive after the timer, survive reload and can be cl
 
 test('every biome yields its own materials and inventory counters remain capped', () => {
   for (const biome of BIOMES) {
-    let state = changeBiome(createGame(NOW), biome.id, NOW);
+    let state = changeBiome(adultAt(NOW), biome.id, NOW);
     state.inventory.materials.grain = 1_000_000_000;
     state = startExpedition(state, [], NOW).state;
     const result = completeExpedition(state, NOW + EXPEDITION_SECONDS * 1000);
@@ -737,9 +744,11 @@ test('food, expeditions and minigames never shorten the real lifecycle', () => {
   assert.equal(fed.pet.growthSeconds, state.pet.growthSeconds);
   const played = rewardMiniGame(fed, 100, fed.lastUpdated).state;
   assert.equal(played.pet.growthSeconds, state.pet.growthSeconds);
-  const expedition = startExpedition(played, [], played.lastUpdated).state;
+  assert.equal(startExpedition(played, [], played.lastUpdated).success, false);
+  const grown = adult();
+  const expedition = startExpedition(grown, [], grown.lastUpdated).state;
   const completed = completeExpedition(expedition, expedition.expedition!.endsAt).state;
-  assert.equal(completed.pet.growthSeconds, state.pet.growthSeconds + EXPEDITION_SECONDS);
+  assert.equal(completed.pet.growthSeconds, grown.pet.growthSeconds + EXPEDITION_SECONDS);
   assert.equal(rewardMiniGame(createGame(NOW), 100, NOW).reward, 0);
 });
 
@@ -861,49 +870,113 @@ test('minigames grant at most five earned points and never supply food or ingred
   assert.equal(rewardMiniGame(stateWithEarnedPoints, 100, state.lastUpdated).state.coins, 142);
 });
 
-test('exploration has two departure slots per rolling day and an eight-hour cooldown', () => {
+test('only an adult principal pet can explore, regardless of free adult companions', () => {
+  const parent = adult();
+  const released = releaseAdult(parent, parent.lastUpdated).state;
+  const states = [
+    released,
+    advanceTime(released, released.lastUpdated + LIFECYCLE.eggSeconds * 1000),
+    advanceTime(released, released.lastUpdated + YOUNG_SECONDS * 1000),
+  ];
+  for (const state of states) {
+    assert.ok(state.freePets.some((pet) => pet.stage === 'adult'));
+    const before = serializeSave(state);
+    const availability = getExplorationAvailability(state, state.lastUpdated);
+    assert.equal(availability.reason, 'stage');
+    assert.equal(availability.canStart, false);
+    assert.equal(availability.remaining, 2);
+    const rejected = startExpedition(state, [state.freePets[0].id], state.lastUpdated);
+    assert.equal(rejected.success, false);
+    assert.match(rejected.message, /mascota principal.*adulta/);
+    assert.equal(serializeSave(rejected.state), before);
+    assert.equal(serializeSave(state), before);
+  }
+  const nearlyAdult = young();
+  nearlyAdult.pet.growthSeconds = ADULT_SECONDS - 1;
+  assert.equal(
+    getExplorationAvailability(nearlyAdult, nearlyAdult.lastUpdated + 999).reason,
+    'stage',
+  );
+  assert.equal(
+    getExplorationAvailability(nearlyAdult, nearlyAdult.lastUpdated + 1000).canStart,
+    true,
+  );
+  const departure = startExpedition(nearlyAdult, [], nearlyAdult.lastUpdated + 1000);
+  assert.equal(departure.success, true);
+  assert.equal(departure.state.pet.stage, 'adult');
+});
+
+test('two departures reset at Mexico City midnight while the eight-hour cooldown persists', () => {
   assert.equal(EXPEDITIONS_PER_DAY, 2);
   assert.equal(EXPEDITION_COOLDOWN_HOURS, 8);
-  const initial = createGame(NOW);
-  assert.deepEqual(getExplorationAvailability(initial, NOW), {
+  assert.equal(EXPLORATION_TIME_ZONE, 'America/Mexico_City');
+  const at = Date.parse('2026-11-18T08:00:00-06:00');
+  const midnight = Date.parse('2026-11-19T00:00:00-06:00');
+  const initial = adultAt(at);
+  assert.deepEqual(getExplorationAvailability(initial, at), {
     remaining: 2,
-    nextAvailableAt: NOW,
+    nextAvailableAt: at,
     canStart: true,
+    reason: null,
   });
   const before = serializeSave(initial);
-  const first = startExpedition(initial, [], NOW);
+  const first = startExpedition(initial, [], at);
   assert.equal(first.success, true);
   assert.equal(serializeSave(initial), before);
-  assert.deepEqual(first.state.explorationStarts, [NOW]);
-  assert.equal(getExplorationAvailability(first.state, NOW + 8 * HOUR).canStart, false);
-  const claimed = completeExpedition(first.state, NOW + EXPEDITION_SECONDS * 1000).state;
+  assert.deepEqual(first.state.explorationStarts, [at]);
+  assert.equal(getExplorationAvailability(first.state, at + 8 * HOUR).reason, 'pending');
+  const claimed = completeExpedition(first.state, first.state.expedition!.endsAt).state;
   assert.deepEqual(getExplorationAvailability(claimed, claimed.lastUpdated), {
     remaining: 1,
-    nextAvailableAt: NOW + 8 * HOUR,
+    nextAvailableAt: at + 8 * HOUR,
     canStart: false,
+    reason: 'cooldown',
   });
-  assert.equal(startExpedition(claimed, [], NOW + 8 * HOUR - 1).success, false);
-  assert.deepEqual(claimed.explorationStarts, [NOW]);
-  const second = startExpedition(claimed, [], NOW + 8 * HOUR);
+  assert.equal(startExpedition(claimed, [], at + 8 * HOUR - 1).success, false);
+  const second = startExpedition(claimed, [], at + 8 * HOUR);
   assert.equal(second.success, true);
-  assert.deepEqual(second.state.explorationStarts, [NOW, NOW + 8 * HOUR]);
   const secondClaimed = completeExpedition(second.state, second.state.expedition!.endsAt).state;
-  assert.deepEqual(getExplorationAvailability(secondClaimed, NOW + 16 * HOUR), {
+  assert.deepEqual(getExplorationAvailability(secondClaimed, midnight - 1), {
     remaining: 0,
-    nextAvailableAt: NOW + 24 * HOUR,
+    nextAvailableAt: midnight,
     canStart: false,
+    reason: 'daily-limit',
   });
-  assert.equal(startExpedition(secondClaimed, [], NOW + 24 * HOUR - 1).success, false);
-  const third = startExpedition(secondClaimed, [], NOW + 24 * HOUR);
+  assert.equal(startExpedition(secondClaimed, [], midnight - 1).success, false);
+  const atNewDay = getExplorationAvailability(secondClaimed, midnight);
+  assert.equal(atNewDay.remaining, 2);
+  assert.equal(atNewDay.canStart, true);
+  const third = startExpedition(secondClaimed, [], midnight);
   assert.equal(third.success, true);
-  assert.deepEqual(third.state.explorationStarts, [NOW + 8 * HOUR, NOW + 24 * HOUR]);
+  assert.deepEqual(third.state.explorationStarts, [at + 8 * HOUR, midnight]);
   const thirdClaimed = completeExpedition(third.state, third.state.expedition!.endsAt).state;
-  assert.equal(getExplorationAvailability(thirdClaimed, NOW + 32 * HOUR).canStart, true);
+  assert.equal(getExplorationAvailability(thirdClaimed, midnight + 8 * HOUR).remaining, 1);
+});
+
+test('a departure late yesterday still requires eight hours today without reducing todays slots', () => {
+  const at = Date.parse('2026-11-18T23:00:00-06:00');
+  const midnight = Date.parse('2026-11-19T00:00:00-06:00');
+  const initial = adultAt(at);
+  const first = startExpedition(initial, [], at).state;
+  const claimed = completeExpedition(first, first.expedition!.endsAt).state;
+  assert.deepEqual(getExplorationAvailability(claimed, midnight), {
+    remaining: 2,
+    nextAvailableAt: at + 8 * HOUR,
+    canStart: false,
+    reason: 'cooldown',
+  });
+  const restored = parseSave(serializeSave(advanceTime(claimed, midnight)), midnight)!;
+  assert.equal(startExpedition(restored, [], at + 8 * HOUR - 1).success, false);
+  const second = startExpedition(restored, [], at + 8 * HOUR);
+  assert.equal(second.success, true);
+  const afterSecond = completeExpedition(second.state, second.state.expedition!.endsAt).state;
+  assert.equal(getExplorationAvailability(afterSecond, afterSecond.lastUpdated).remaining, 1);
+  assert.equal(startExpedition(afterSecond, [], at + 16 * HOUR).success, true);
 });
 
 test('exploration restrictions survive saving, travel, pet release and a backwards clock', () => {
-  const initial = adult();
-  const at = initial.lastUpdated;
+  const at = Date.parse('2026-11-18T08:00:00-06:00');
+  const initial = adultAt(at);
   const first = startExpedition(initial, [], at).state;
   const claimed = completeExpedition(first, first.expedition!.endsAt).state;
   const traveled = changeBiome(claimed, 'coast', claimed.lastUpdated);
@@ -914,13 +987,16 @@ test('exploration restrictions survive saving, travel, pet release and a backwar
     remaining: 1,
     nextAvailableAt: at + 8 * HOUR,
     canStart: false,
+    reason: 'stage',
   });
   assert.equal(startExpedition(restored, [], at - HOUR).success, false);
-  assert.equal(startExpedition(restored, [], at + 8 * HOUR).success, true);
-  assert.equal(getExplorationAvailability(advanceTime(restored, at + 48 * HOUR)).remaining, 2);
+  assert.equal(startExpedition(restored, [], at + 8 * HOUR).success, false);
+  const grownAgain = advanceTime(restored, restored.lastUpdated + ADULT_SECONDS * 1000);
+  assert.equal(getExplorationAvailability(grownAgain).remaining, 2);
+  assert.equal(startExpedition(grownAgain, [], grownAgain.lastUpdated).success, true);
 });
 
-test('older saves preserve points and resources while adopting exploration restrictions', () => {
+test('older saves preserve resources and may still claim an expedition started before adulthood was required', () => {
   const state = createGame(NOW);
   state.coins = 115;
   state.inventory.materials.berries = 9;
@@ -930,14 +1006,19 @@ test('older saves preserve points and resources while adopting exploration restr
   assert.equal(restored.coins, 115);
   assert.equal(restored.inventory.materials.berries, 9);
   assert.deepEqual(restored.explorationStarts, []);
-  const active = startExpedition(state, [], NOW).state;
+  const active = startExpedition(adultAt(NOW), [], NOW).state;
   const oldActive = JSON.parse(serializeSave(active));
   delete oldActive.explorationStarts;
+  oldActive.pet.stage = 'egg';
+  oldActive.pet.growthSeconds = 0;
   const resumed = parseSave(JSON.stringify(oldActive), NOW)!;
+  assert.equal(resumed.pet.stage, 'egg');
   assert.deepEqual(resumed.explorationStarts, [NOW]);
-  const claimed = completeExpedition(resumed, resumed.expedition!.endsAt).state;
-  assert.equal(getExplorationAvailability(claimed, claimed.lastUpdated).remaining, 1);
-  assert.equal(startExpedition(claimed, [], NOW + HOUR).success, false);
+  const claimed = completeExpedition(resumed, resumed.expedition!.endsAt);
+  assert.equal(claimed.success, true);
+  assert.ok(claimed.rewards.berries > 0);
+  assert.equal(getExplorationAvailability(claimed.state, claimed.state.lastUpdated).remaining, 1);
+  assert.equal(startExpedition(claimed.state, [], NOW + HOUR).success, false);
 });
 
 test('invalid exploration histories are rejected without accepting arbitrary timestamps', () => {
@@ -955,4 +1036,59 @@ test('invalid exploration histories are rejected without accepting arbitrary tim
     (state as any).explorationStarts = history;
     assert.equal(parseSave(serializeSave(state), NOW), null);
   }
+});
+
+test('affection only builds bond when a born pet begins with a low mood', () => {
+  for (const stage of [baby(), young(), adult()]) {
+    stage.pet.needs.joy = 29;
+    const before = serializeSave(stage);
+    const result = applyCare(stage, 'pet', stage.lastUpdated);
+    assert.equal(result.success, true);
+    assert.equal(result.state.pet.needs.joy, 51);
+    assert.equal(result.state.pet.bond, stage.pet.bond + 2);
+    assert.equal(result.state.xp, stage.xp);
+    assert.equal(result.state.coins, stage.coins);
+    assert.equal(result.state.pet.growthSeconds, stage.pet.growthSeconds);
+    assert.equal(result.state.activities, stage.activities);
+    assert.equal(serializeSave(stage), before);
+    let continued = result.state;
+    for (let i = 0; i < 10; i++)
+      continued = applyCare(continued, 'pet', continued.lastUpdated).state;
+    assert.equal(continued.pet.needs.joy, 100);
+    assert.equal(continued.pet.bond, result.state.pet.bond);
+    for (const mood of [30, 100]) {
+      const satisfied = structuredClone(stage);
+      satisfied.pet.needs.joy = mood;
+      assert.equal(
+        applyCare(satisfied, 'pet', satisfied.lastUpdated).state.pet.bond,
+        stage.pet.bond,
+      );
+    }
+  }
+  const closeBond = baby();
+  closeBond.pet.needs.joy = 29;
+  closeBond.pet.bond = 99;
+  assert.equal(applyCare(closeBond, 'pet', closeBond.lastUpdated).state.pet.bond, 100);
+  const egg = createGame(NOW);
+  egg.pet.needs.joy = 0;
+  assert.equal(applyCare(egg, 'pet', NOW).state.pet.bond, egg.pet.bond);
+});
+
+test('minigame points buy decorations while raising mood without granting ingredients', () => {
+  let state = baby();
+  state.pet.needs.joy = 20;
+  const initialInventory = structuredClone(state.inventory);
+  const first = rewardMiniGame(state, 25, state.lastUpdated);
+  assert.equal(first.reward, 5);
+  assert.equal(first.state.coins, 5);
+  assert.ok(first.state.pet.needs.joy > state.pet.needs.joy);
+  state = first.state;
+  for (let i = 0; i < 7; i++) state = rewardMiniGame(state, 25, state.lastUpdated).state;
+  assert.equal(state.coins, 40);
+  assert.deepEqual(state.inventory, initialInventory);
+  const purchase = purchaseDecoration(state, 'flowers', state.lastUpdated);
+  assert.equal(purchase.success, true);
+  assert.equal(purchase.state.coins, 0);
+  assert.deepEqual(purchase.state.decorations, ['flowers']);
+  assert.deepEqual(purchase.state.inventory, initialInventory);
 });
