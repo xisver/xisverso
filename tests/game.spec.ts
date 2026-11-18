@@ -15,6 +15,9 @@ const MATERIAL_IDS: MaterialId[] = ['berries', 'grain', 'kelp', 'root', 'herb'];
 
 function bornState(stage: PetStage = 'adult', freeCount = 0): GameState {
   const state = createGame();
+  // Care and kitchen fixtures bring their own supplies; new games are tested separately.
+  state.inventory.materials = { berries: 2, grain: 1, kelp: 0, root: 0, herb: 1 };
+  state.inventory.food = { 'fruit-bowl': 1, 'sea-soup': 0, 'root-stew': 0 };
   state.pet.stage = stage;
   state.pet.growthSeconds = {
     egg: 0,
@@ -72,7 +75,7 @@ async function feedPet(page: Page) {
   await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
   await page
     .locator('#food-options')
-    .getByRole('button', { name: 'Elegir alimento', exact: true })
+    .getByRole('button', { name: 'Cambiar alimento', exact: true })
     .click();
   await page.locator('#food-choice-list [data-select-food="fruit-bowl"]').click();
   await touchPet(page);
@@ -80,7 +83,14 @@ async function feedPet(page: Page) {
 
 async function openKitchen(page: Page) {
   await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
-  await page.locator('#food-options').getByRole('button', { name: 'Cocinar', exact: true }).click();
+  await page
+    .locator('#food-options')
+    .getByRole('button', { name: 'Cambiar alimento', exact: true })
+    .click();
+  await page
+    .locator('#food-dialog')
+    .getByRole('button', { name: 'Cocinar más raciones', exact: true })
+    .click();
 }
 
 async function openActivity(page: Page, kind: string) {
@@ -153,13 +163,13 @@ test('comer aumenta Apetito y consume una porción, sin cobrar puntos al elegir 
     'true',
   );
   expect((await readState(page)).inventory.food['fruit-bowl']).toBe(1);
-  await expect(page.locator('#coins')).toHaveText('80');
+  await expect(page.locator('#coins')).toHaveText('0');
   await touchPet(page);
   const fed = await readState(page);
   expect(fed.pet.needs.appetite).toBeGreaterThan(before.pet.needs.appetite);
   expect(fed.inventory.food['fruit-bowl']).toBe(0);
   expect(fed.pet.diet['fruit-bowl']).toBe(1);
-  await expect(page.locator('#coins')).toHaveText('80');
+  await expect(page.locator('#coins')).toHaveText('0');
   await page.locator('#open-pet').click();
   await expect(page.getByRole('progressbar', { name: 'Apetito', exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar', { name: 'Saciedad', exact: true })).toHaveCount(0);
@@ -320,8 +330,52 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
   expect((await readState(page)).expedition).toBeNull();
 });
 
+test('las exploraciones conservan la espera de ocho horas y el límite móvil al recargar', async ({
+  page,
+}) => {
+  const initial = createGame();
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await page.getByRole('button', { name: 'Explorar', exact: true }).click();
+  await expect(page.locator('#start-expedition')).toBeEnabled();
+  await page.locator('#start-expedition').click();
+  const first = await readState(page);
+  expect(first.explorationStarts).toHaveLength(1);
+  const firstStart = first.explorationStarts[0];
+  await page.clock.fastForward(21000);
+  await expect(page.locator('#claim-expedition')).toBeEnabled();
+  await page.locator('#claim-expedition').click();
+  await expect(page.locator('#start-expedition')).toBeDisabled();
+  await expect(page.locator('#exploration-remaining')).toContainText('1');
+  await expect(page.locator('#exploration-wait')).not.toBeEmpty();
+  await page.reload();
+  await page.getByRole('button', { name: 'Explorar', exact: true }).click();
+  await expect(page.locator('#start-expedition')).toBeDisabled();
+  expect((await readState(page)).explorationStarts).toHaveLength(1);
+  const now = await page.evaluate(() => Date.now());
+  await page.clock.fastForward(firstStart + 8 * 3600000 + 1000 - now);
+  await expect(page.locator('#start-expedition')).toBeEnabled();
+  await page.locator('#start-expedition').click();
+  expect((await readState(page)).explorationStarts).toHaveLength(2);
+  await page.clock.fastForward(21000);
+  await page.locator('#claim-expedition').click();
+  await expect(page.locator('#start-expedition')).toBeDisabled();
+  await expect(page.locator('#exploration-remaining')).toContainText('0');
+  await page.reload();
+  await page.getByRole('button', { name: 'Explorar', exact: true }).click();
+  await expect(page.locator('#start-expedition')).toBeDisabled();
+  const afterSecond = await page.evaluate(() => Date.now());
+  await page.clock.fastForward(firstStart + 24 * 3600000 + 1000 - afterSecond);
+  await expect(page.locator('#start-expedition')).toBeEnabled();
+  await expect(page.locator('#exploration-remaining')).toContainText('1');
+});
+
 test('el huevo espera a nacer antes de jugar las seis aventuras', async ({ page }) => {
   await gotoGame(page);
+  const fresh = await readState(page);
+  expect(fresh.coins).toBe(0);
+  expect(Object.values(fresh.inventory.materials)).toEqual([0, 0, 0, 0, 0]);
   await page.getByRole('button', { name: 'Jugar', exact: true }).click();
   await expect(page.locator('#minigame-list [data-minigame]')).toHaveCount(6);
   await expect(page.locator('#games-notice')).toContainText('nazca');
@@ -351,15 +405,19 @@ test('las luciérnagas cuentan al llegar la mascota y terminar entrega puntos un
   await expect(page.locator('#game-score')).toHaveText('0');
   await expect(page.locator('#game-score')).toHaveText('1', { timeout: 6000 });
   expect(await page.locator('#game-field canvas').getAttribute('data-pet-x')).not.toBe(beforeX);
-  expect((await readState(page)).coins).toBe(80);
+  expect((await readState(page)).coins).toBe(initial.coins);
   await page.clock.fastForward(21000);
-  await expect(page.locator('#game-result')).toContainText('+6 puntos');
-  expect((await readState(page)).coins).toBe(86);
+  const completed = await readState(page);
+  const reward = completed.coins - initial.coins;
+  expect(reward).toBeGreaterThanOrEqual(1);
+  expect(reward).toBeLessThanOrEqual(5);
+  expect(completed.inventory).toEqual(initial.inventory);
+  await expect(page.locator('#game-result')).toContainText(`+${reward} puntos`);
   await page.clock.fastForward(1000);
-  expect((await readState(page)).coins).toBe(86);
+  expect((await readState(page)).coins).toBe(completed.coins);
   await page.getByRole('button', { name: 'Volver al refugio', exact: true }).click();
   await page.reload();
-  expect((await readState(page)).coins).toBe(86);
+  expect((await readState(page)).coins).toBe(completed.coins);
 });
 
 for (const kind of ['fruit', 'puddles', 'rhythm', 'memory', 'ball'] as const) {
@@ -453,7 +511,7 @@ for (const kind of ['fruit', 'puddles', 'rhythm', 'memory', 'ball'] as const) {
     }
     await page.keyboard.press('Escape');
     await expect(page.locator('#game-dialog')).not.toBeVisible();
-    expect((await readState(page)).coins).toBe(80);
+    expect((await readState(page)).coins).toBe(0);
   });
 }
 
@@ -472,7 +530,7 @@ test('el teclado permite alimentar y cancelar un minijuego sin obtener puntos', 
   await expect(page.locator('#game-score')).toHaveText('1', { timeout: 6000 });
   await page.keyboard.press('Escape');
   await expect(page.locator('#game-dialog')).not.toBeVisible();
-  expect((await readState(page)).coins).toBe(80);
+  expect((await readState(page)).coins).toBe(0);
 });
 for (const height of [844, 667]) {
   test(`el refugio móvil de 390x${height} mantiene el cuidado, los viajes y la cocina sin desbordar`, async ({
@@ -813,24 +871,75 @@ test('otra pestaña en bienvenida retoma la partida iniciada sin sobrescribirla'
   expect((await readState(other)).pet.id).toBe(first.pet.id);
 });
 
-test('Alimentar despliega arriba Cocinar y Elegir alimento sin gastar una ración', async ({
-  page,
-}) => {
-  await seedState(page, bornState('baby'));
-  await gotoGame(page);
-  const feed = page.getByRole('button', { name: 'Alimentar', exact: true });
-  await feed.click();
-  const panel = page.locator('#food-options');
-  await expect(panel).toBeVisible();
-  const buttonBounds = await feed.boundingBox();
-  const panelBounds = await panel.boundingBox();
-  expect(panelBounds!.y + panelBounds!.height).toBeLessThanOrEqual(buttonBounds!.y + 1);
-  await expect(panel.getByRole('button', { name: 'Cocinar', exact: true })).toBeVisible();
-  await panel.getByRole('button', { name: 'Elegir alimento', exact: true }).click();
-  await page.locator('#food-choice-list [data-select-food="fruit-bowl"]').click();
-  expect((await readState(page)).inventory.food['fruit-bowl']).toBe(1);
-  expect((await readState(page)).coins).toBe(80);
-});
+for (const viewport of [
+  { width: 1440, height: 1000 },
+  { width: 390, height: 844 },
+]) {
+  test(`Alimentar muestra una ficha compacta y conserva el cambio de ración en ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    const initial = bornState('baby');
+    initial.inventory.food['sea-soup'] = 2;
+    await seedState(page, initial);
+    await gotoGame(page);
+    const feed = page.getByRole('button', { name: 'Alimentar', exact: true });
+    await feed.click();
+    const panel = page.locator('#food-options');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('#selected-food-name')).toHaveText('Cuenco de bayas');
+    await expect(panel.locator('#selected-food-recovery')).toHaveText('+32 Apetito');
+    const change = panel.getByRole('button', { name: 'Cambiar alimento', exact: true });
+    await expect(change).toHaveText('>');
+    await expect(panel.getByRole('button')).toHaveCount(1);
+    const buttonBounds = await feed.boundingBox();
+    const panelBounds = await panel.boundingBox();
+    expect(panelBounds!.y + panelBounds!.height).toBeLessThanOrEqual(buttonBounds!.y + 1);
+    expect(panelBounds!.width).toBeLessThanOrEqual(220);
+    expect(panelBounds!.height).toBeLessThanOrEqual(75);
+    expect(panelBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(panelBounds!.x + panelBounds!.width).toBeLessThanOrEqual(viewport.width);
+    await change.click();
+    await expect(page.locator('#food-dialog')).toBeVisible();
+    await page.locator('#food-choice-list [data-select-food="sea-soup"]').click();
+    const selected = await readState(page);
+    expect(selected.selectedFood).toBe('sea-soup');
+    expect(selected.inventory).toEqual(initial.inventory);
+    expect(selected.coins).toBe(initial.coins);
+    await page.reload();
+    await feed.click();
+    await expect(panel.locator('#selected-food-name')).toHaveText('Sopa de la costa');
+    await expect(panel.locator('#selected-food-recovery')).toHaveText('+44 Apetito');
+    await touchPet(page);
+    const fed = await readState(page);
+    expect(fed.inventory.food['sea-soup']).toBe(1);
+    expect(fed.inventory.food['fruit-bowl']).toBe(1);
+    expect(fed.pet.diet['sea-soup']).toBe(1);
+    expect(fed.pet.needs.appetite).toBeGreaterThan(selected.pet.needs.appetite);
+  });
+}
+
+for (const stage of ['egg', 'baby', 'young', 'adult'] as const) {
+  test(`el panel de ${stage} conserva progreso y Apetito sin explicaciones de duración ni escala`, async ({
+    page,
+  }) => {
+    await seedState(page, bornState(stage));
+    await gotoGame(page);
+    const durationText = /\b(?:horas?|días?|minutos?)\b|\b\d+\s*[hd]\b/iu;
+    await expect(page.locator('#interaction-hint')).not.toContainText(durationText);
+    await page.locator('#open-pet').click();
+    await expect(page.locator('#life-progress')).toBeVisible();
+    await expect(page.locator('#pet-dialog')).not.toContainText(durationText);
+    const appetite = page.getByRole('progressbar', { name: 'Apetito', exact: true });
+    await expect(appetite).toBeVisible();
+    await expect(appetite).toHaveAttribute('aria-valuemin', '0');
+    await expect(appetite).toHaveAttribute('aria-valuemax', '100');
+    await expect(appetite).not.toHaveAttribute('aria-valuetext', /lleno|hambre/iu);
+    await expect(page.locator('#pet-dialog')).not.toContainText(
+      /100\s*=|0\s*=|100 lleno|0 con mucha hambre/iu,
+    );
+  });
+}
 
 test('la profundidad cambia el tamaño sin separar los pies del suelo', async ({ page }) => {
   await seedState(page, bornState('young'));
@@ -872,7 +981,9 @@ test('los adultos visitan de vez en cuando y permanecen en su colección cuando 
 test('comprar decoración descuenta puntos una vez y conserva la compra al recargar', async ({
   page,
 }) => {
-  await seedState(page, bornState('baby'));
+  const initial = bornState('baby');
+  initial.coins = 80;
+  await seedState(page, initial);
   await gotoGame(page);
   await page.getByRole('button', { name: 'Menú', exact: true }).click();
   await page

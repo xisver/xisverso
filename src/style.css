@@ -3589,15 +3589,30 @@ dialog h3 {
   position: relative;
   display: flex;
 }
+.exploration-limits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 14px 0 20px;
+  color: #758662;
+  font-size: 12px;
+}
+.exploration-limits strong {
+  color: #526c4e;
+}
 .food-options {
   position: absolute;
-  bottom: calc(100% + 18px);
+  bottom: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: 225px;
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 204px;
+  padding: 7px 8px;
   border: 2px solid #fffdf2;
-  border-radius: 19px;
+  border-radius: 15px;
   background: #fffbed;
   box-shadow: 0 10px 30px #2c493b24;
   color: #536b52;
@@ -3605,30 +3620,49 @@ dialog h3 {
 .food-options[hidden] {
   display: none;
 }
-.food-options strong {
-  display: block;
-  padding: 5px 8px 8px;
-  font-size: 12px;
+.selected-food-icon {
+  display: grid;
+  place-items: center;
+  color: #819466;
 }
-.food-options button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  width: 100%;
+.selected-food-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+.selected-food-summary {
+  min-width: 0;
+  flex: 1;
+}
+.selected-food-summary strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 17px;
+}
+.selected-food-summary small {
+  display: block;
+  font-size: 10px;
+  line-height: 16px;
+  color: #7b8c61;
+}
+.food-options .food-change {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 0;
-  border-radius: 12px;
-  background: transparent;
-  text-align: left;
+  border-radius: 10px;
+  background: #e8eddb;
+  font-size: 21px;
   color: #536b52;
 }
-.food-options button:hover,
-.food-options button:focus-visible {
-  background: #e8eddb;
-}
-.food-options .icon {
-  width: 21px;
-  height: 21px;
+.food-options .food-change:hover,
+.food-options .food-change:focus-visible {
+  background: #dae3c7;
 }
 .food-options::after {
   content: '';
@@ -3904,8 +3938,7 @@ dialog h3 {
     font-size: 11px;
   }
   .food-options {
-    left: 30px;
-    width: 210px;
+    width: 204px;
   }
   .activity-controls {
     gap: 6px;
@@ -3926,6 +3959,9 @@ dialog h3 {
   }
 }
 @media (max-width: 380px) {
+  .food-options {
+    transform: translateX(-44%);
+  }
   .decoration-list,
   .minigame-list {
     grid-template-columns: 1fr;

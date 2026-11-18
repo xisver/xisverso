@@ -48,6 +48,8 @@ export interface GameState {
   inventory: { materials: Record<MaterialId, number>; food: Record<RecipeId, number> };
   selectedFood: RecipeId;
   expedition: Expedition | null;
+  /** Last departures; kept across generations, travel and reloads. */
+  explorationStarts: number[];
   coins: number;
   level: number;
   xp: number;
@@ -213,6 +215,10 @@ export const LIFECYCLE = {
   youngSeconds: 3 * 24 * 3600,
 } as const;
 export const EXPEDITION_SECONDS = 20;
+export const EXPEDITION_COOLDOWN_HOURS = 8;
+export const EXPEDITIONS_PER_DAY = 2;
+export const EXPLORATION_WINDOW_HOURS = 24;
+const HOUR = 3_600_000;
 export const MAX_OFFLINE_HOURS = 8;
 export const XP_PER_LEVEL = 100;
 export const CARE_COSTS: Readonly<Record<Action, number>> = { feed: 0, clean: 0, rest: 0, pet: 0 };
@@ -268,6 +274,7 @@ function clone(state: GameState): GameState {
     pet: copyPet(state.pet),
     freePets: state.freePets.map(copyPet),
     decorations: [...state.decorations],
+    explorationStarts: [...state.explorationStarts],
     inventory: { materials: { ...state.inventory.materials }, food: { ...state.inventory.food } },
     expedition: state.expedition
       ? {
@@ -313,12 +320,13 @@ export function createGame(now = Date.now()): GameState {
     currentBiome: 'forest',
     freePets: [],
     inventory: {
-      materials: { berries: 2, grain: 1, kelp: 0, root: 0, herb: 1 },
+      materials: emptyMaterials(),
       food: { 'fruit-bowl': 1, 'sea-soup': 0, 'root-stew': 0 },
     },
     selectedFood: 'fruit-bowl',
     expedition: null,
-    coins: 80,
+    explorationStarts: [],
+    coins: 0,
     level: 1,
     xp: 0,
     lastUpdated: timestamp,
@@ -581,6 +589,39 @@ function expeditionRewards(
   result.herb = factor;
   return result;
 }
+export function getExplorationAvailability(
+  state: GameState,
+  now = Date.now(),
+): { remaining: number; nextAvailableAt: number; canStart: boolean } {
+  const timestamp = Math.max(state.lastUpdated, normalizeNow(now, state.lastUpdated));
+  const starts = [
+    ...new Set([
+      ...state.explorationStarts,
+      ...(state.expedition ? [state.expedition.startedAt] : []),
+    ]),
+  ].sort((a, b) => a - b);
+  const recent = starts.filter(
+    (startedAt) => startedAt > timestamp - EXPLORATION_WINDOW_HOURS * HOUR,
+  );
+  const remaining = Math.max(0, EXPEDITIONS_PER_DAY - recent.length);
+  const lastDeparture = starts.at(-1);
+  const cooldownEnds =
+    lastDeparture === undefined
+      ? timestamp
+      : Math.min(Number.MAX_SAFE_INTEGER, lastDeparture + EXPEDITION_COOLDOWN_HOURS * HOUR);
+  const nextSlot = remaining
+    ? timestamp
+    : Math.min(
+        Number.MAX_SAFE_INTEGER,
+        recent[recent.length - EXPEDITIONS_PER_DAY] + EXPLORATION_WINDOW_HOURS * HOUR,
+      );
+  const nextAvailableAt = Math.max(timestamp, cooldownEnds, nextSlot);
+  return {
+    remaining,
+    nextAvailableAt,
+    canStart: !state.expedition && remaining > 0 && nextAvailableAt <= timestamp,
+  };
+}
 export function startExpedition(
   state: GameState,
   companionIds: string[],
@@ -604,6 +645,16 @@ export function startExpedition(
       success: false,
       message: 'Elige hasta tres compañeros libres diferentes.',
     };
+  const availability = getExplorationAvailability(next, next.lastUpdated);
+  if (!availability.canStart)
+    return {
+      state: next,
+      success: false,
+      message:
+        availability.remaining === 0
+          ? 'Ya realizaste las dos exploraciones disponibles. Tu equipo volverá a salir cuando se libere una plaza.'
+          : 'Tu equipo necesita descansar antes de otra exploración.',
+    };
   if (next.lastUpdated > Number.MAX_SAFE_INTEGER - EXPEDITION_SECONDS * 1000)
     return {
       state: next,
@@ -618,6 +669,9 @@ export function startExpedition(
     endsAt: next.lastUpdated + EXPEDITION_SECONDS * 1000,
     rewards: expeditionRewards(next.currentBiome, companionIds.length, next.pet.seed),
   };
+  next.explorationStarts = [...next.explorationStarts, next.lastUpdated].slice(
+    -EXPEDITIONS_PER_DAY,
+  );
   return {
     state: next,
     success: true,
@@ -697,7 +751,7 @@ export function rewardMiniGame(
   const next = advanceTime(state, now);
   const settledScore = Number.isFinite(score) ? Math.floor(clamp(score, 0, MAX_COUNTER)) : 0;
   if (next.pet.stage === 'egg' || settledScore === 0) return { state: next, reward: 0 };
-  const reward = settledScore === 0 ? 0 : Math.min(35, 5 + settledScore);
+  const reward = Math.min(5, Math.ceil(settledScore / 5));
   next.coins = Math.min(MAX_COUNTER, next.coins + reward);
   next.miniGameBest = Math.max(next.miniGameBest, settledScore);
   next.pet.needs.joy = clamp(next.pet.needs.joy + Math.min(20, settledScore * 2));
@@ -940,6 +994,26 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
         };
       }
     }
+    if (data.version === 3 && data.explorationStarts !== undefined) {
+      const starts = data.explorationStarts;
+      if (
+        !Array.isArray(starts) ||
+        starts.length > EXPEDITIONS_PER_DAY ||
+        starts.some(
+          (value, index) =>
+            !validInteger(value, 0, data.lastUpdated as number) ||
+            (index > 0 && value <= starts[index - 1]),
+        )
+      )
+        return null;
+      next.explorationStarts = [...starts] as number[];
+    }
+    // Existing v1/v2/v3 games have no history. An expedition already underway
+    // still occupies its departure slot when this additive field is introduced.
+    if (next.expedition && !next.explorationStarts.includes(next.expedition.startedAt))
+      next.explorationStarts = [...next.explorationStarts, next.expedition.startedAt]
+        .sort((a, b) => a - b)
+        .slice(-EXPEDITIONS_PER_DAY);
     if (data.version === 3) {
       if (
         !Array.isArray(data.decorations) ||

@@ -28,35 +28,41 @@ La confirmación inicia la incubación y el guardado. Los borradores no avanzan 
 
 El huevo tarda cinco horas en nacer como bebé; el bebé necesita otras veinte horas para ser joven y el joven tres días para ser adulto. Son duraciones por etapa, con 97 horas acumuladas hasta adulto. El reloj real continúa cuando el juego está cerrado.
 
+Estos tiempos son reglas internas de diseño. La interfaz muestra etapa y progreso, sin explicar las horas que tarda cada evolución ni mostrar una cuenta atrás.
+
 Cuidados, recetas y minijuegos no saltan esas duraciones. Las caricias permanecen disponibles incluso con el ánimo lleno y no dan vínculo, experiencia ni crecimiento. El vínculo puede aumentar por otros cuidados y actividades.
 
 Al liberar un adulto, permanece en la colección y en el bioma donde se liberó mientras empieza la crianza de otro huevo. Sus apariciones en la escena son ocasionales: ventanas breves de hasta 24 segundos en ciclos de 180 segundos. Estar ausente de la escena no elimina al adulto ni impide seleccionarlo para una expedición.
 
 ## Bienestar y cocina
 
-**Apetito** usa 100 para lleno y 0 para mucha hambre. Comer lo aumenta y el tiempo lo reduce. Energía, higiene y ánimo mantienen la misma orientación de bienestar. Todas las necesidades están entre 0 y 100.
+Internamente, **Apetito** usa 100 para lleno y 0 para mucha hambre. Comer lo aumenta y el tiempo lo reduce. Energía, higiene y ánimo mantienen la misma orientación de bienestar. Todas las necesidades están entre 0 y 100; la interfaz muestra sus barras y valores, sin explicar los extremos de Apetito.
 
 El deterioro es lento y varía por etapa y bioma. Una ausencia larga limita el deterioro a ocho horas despierto, mientras la edad sigue avanzando durante toda la ausencia. No hay muerte permanente.
 
-Alimentar reúne las opciones de Cocinar y Elegir alimento en un menú encima del botón. Elegir o llevar una herramienta no gasta recursos; cocinar descuenta ingredientes y alimentar consume una ración. La dieta se conserva para futuras evoluciones alimentarias, que todavía no están definidas.
+Alimentar muestra una ficha compacta encima del botón con la receta seleccionada, la recuperación de Apetito y una flecha para cambiarla; el selector permite acceder a la cocina. Elegir o llevar una herramienta no gasta recursos; cocinar descuenta ingredientes y alimentar consume una ración. La dieta se conserva para futuras evoluciones alimentarias, que todavía no están definidas.
 
 ## Explorar, jugar y decorar
 
 Las expediciones aceptan hasta tres adultos libres diferentes. Destino, grupo y materiales se fijan al salir para impedir cambios de recompensa al viajar o recargar. Los materiales se reclaman una sola vez al terminar.
 
-Los seis minijuegos duran 20 segundos y hacen participar a la mascota: buscar luciérnagas, recoger fruta, saltar charcos, bailar, recordar un sendero y empujar una pelota. Puntúan acciones propias de cada actividad. Terminar concede una recompensa local; salir antes no la concede.
+La partida nueva empieza con cero puntos, cero ingredientes y una ración de bienvenida. Explorar es la única fuente de ingredientes nuevos. El historial `explorationStarts` guarda los dos últimos inicios y permite como máximo dos salidas por ventana móvil de 24 horas, con ocho horas entre inicios. Viajar, recargar o pasar la medianoche no reinicia este límite.
+
+Los seis minijuegos duran 20 segundos y hacen participar a la mascota: buscar luciérnagas, recoger fruta, saltar charcos, bailar, recordar un sendero y empujar una pelota. Puntúan acciones propias de cada actividad. Completar una partida con aciertos concede entre uno y cinco puntos, sin ingredientes ni comida. Cancelar o terminar sin aciertos no concede puntos.
 
 Los puntos existentes (`coins`) permiten comprar seis decoraciones. Las compras son atómicas, no se duplican y quedan guardadas. No se incorporan pagos ni dinero real.
 
 ## Ambiente sonoro
 
-Web Audio genera música ambiental original por bioma y efectos de interacción. No necesita muestras, descargas ni servicios de audio. La música empieza después de una interacción permitida por el navegador.
+Web Audio genera piano ambiental original por bioma y efectos de interacción. El piano usa armónicos suaves, ataque breve, caída larga, acordes espaciados, reverberación y pausas amplias. No copia melodías ni necesita muestras, descargas o servicios de audio. La música empieza después de una interacción permitida por el navegador.
 
 Música y efectos tienen activación y volumen independientes. Las preferencias persisten localmente y ocultar la página pausa el audio para evitar que siga sonando en segundo plano.
 
 ## Persistencia y visitas
 
 El esquema v3 guarda Apetito, la etapa bebé y las decoraciones. La migración v2 conserva etapas y progreso relativo e invierte el hambre para obtener Apetito. La saciedad de v1 ya tiene la orientación correcta y su mascota se mantiene adulta. Se conservan los respaldos anteriores.
+
+El historial de exploración se añade dentro de v3 y admite partidas anteriores sin ese campo. Una expedición ya iniciada conserva su salida en el historial. El nuevo saldo inicial y las restricciones económicas se aplican sin retirar recursos existentes de partidas migradas.
 
 Las visitas Firebase comparten manualmente una vista mínima del refugio mediante un código. Auth anónima identifica al propietario y Firestore Lite realiza lecturas puntuales, sin directorio ni listeners permanentes. El dueño puede retirar la vista. El guardado, las necesidades, el inventario y los puntos permanecen locales.
 

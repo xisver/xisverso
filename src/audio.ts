@@ -15,11 +15,57 @@ const defaults: AudioSettings = {
   musicVolume: 0.25,
   effectsVolume: 0.45,
 };
-const scales: Record<BiomeId, number[]> = {
-  forest: [48, 55, 60, 64, 67, 72, 76, 79],
-  coast: [50, 57, 62, 65, 69, 74, 77, 81],
-  tundra: [45, 52, 57, 60, 64, 69, 72, 76],
+const harmonies: Record<BiomeId, readonly (readonly number[])[]> = {
+  forest: [
+    [48, 55, 59, 64],
+    [45, 52, 60, 64],
+    [41, 48, 55, 60],
+    [43, 50, 57, 62],
+  ],
+  coast: [
+    [50, 57, 60, 65],
+    [46, 53, 60, 62],
+    [48, 55, 62, 65],
+    [45, 52, 57, 64],
+  ],
+  tundra: [
+    [45, 52, 59, 60],
+    [41, 48, 55, 64],
+    [48, 55, 59, 62],
+    [43, 50, 57, 60],
+  ],
 };
+interface PianoEvent {
+  tones: readonly number[];
+  octave: number;
+  velocity: number;
+  pause: number;
+}
+// These original phrases leave a long breath between each small musical thought.
+const phrases: readonly (readonly PianoEvent[])[] = [
+  [
+    { tones: [0], octave: 0, velocity: 0.21, pause: 0.23 },
+    { tones: [1, 3], octave: 0, velocity: 0.12, pause: 1.85 },
+    { tones: [2], octave: 12, velocity: 0.16, pause: 2.7 },
+    { tones: [3], octave: 0, velocity: 0.15, pause: 3.8 },
+    { tones: [1], octave: 12, velocity: 0.12, pause: 4.6 },
+    { tones: [2, 3], octave: 0, velocity: 0.085, pause: 9.4 },
+  ],
+  [
+    { tones: [0, 2], octave: 0, velocity: 0.13, pause: 2.6 },
+    { tones: [3], octave: 0, velocity: 0.18, pause: 1.45 },
+    { tones: [1], octave: 12, velocity: 0.13, pause: 3.9 },
+    { tones: [2], octave: 0, velocity: 0.12, pause: 2.4 },
+    { tones: [3], octave: 0, velocity: 0.095, pause: 11.2 },
+  ],
+  [
+    { tones: [0], octave: 0, velocity: 0.19, pause: 0.36 },
+    { tones: [1, 2], octave: 0, velocity: 0.1, pause: 3.2 },
+    { tones: [3], octave: 0, velocity: 0.17, pause: 2.1 },
+    { tones: [2], octave: 12, velocity: 0.11, pause: 5.7 },
+    { tones: [1, 3], octave: 0, velocity: 0.09, pause: 10.3 },
+  ],
+];
 
 /** Original, procedural music: no downloads, samples or external audio services. */
 export function createAudio() {
@@ -39,13 +85,100 @@ export function createAudio() {
   }
   let context: AudioContext | undefined;
   let musicBus: GainNode | undefined;
+  let pianoBus: GainNode | undefined;
   let effectsBus: GainNode | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let biome: BiomeId = 'forest';
-  let beat = 0;
+  let phraseNumber = 0;
+  let phraseStep = 0;
+  let nextNoteAt: number | undefined;
   let unlocked = false;
   let disposed = false;
   const voices = new Set<OscillatorNode>();
+  const pianoVoices = new Map<OscillatorNode, GainNode>();
+
+  function createRoom() {
+    if (!context || !pianoBus || !musicBus) return;
+    const room = context.createConvolver();
+    const wet = context.createGain();
+    const length = Math.ceil(context.sampleRate * 2.8);
+    const impulse = context.createBuffer(2, length, context.sampleRate);
+    let seed = 91427;
+    for (let channel = 0; channel < 2; channel++) {
+      const samples = impulse.getChannelData(channel);
+      let softened = 0;
+      for (let i = 0; i < length; i++) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        softened = softened * 0.68 + ((seed / 0x1_0000_0000) * 2 - 1) * 0.32;
+        samples[i] = i < context.sampleRate * 0.018 ? 0 : softened * Math.exp((-5 * i) / length);
+      }
+    }
+    room.buffer = impulse;
+    wet.gain.value = 0.2;
+    pianoBus.connect(room).connect(wet).connect(musicBus);
+  }
+
+  function piano(midi: number, velocity: number, delay = 0) {
+    if (!context || !pianoBus || disposed) return;
+    const at = context.currentTime + delay;
+    const pan = context.createStereoPanner();
+    pan.pan.value = Math.max(-0.24, Math.min(0.24, (midi - 60) / 90));
+    const filter = context.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 2250;
+    filter.Q.value = 0.35;
+    pan.connect(filter).connect(pianoBus);
+    const partials = [
+      { ratio: 1, gain: 1, duration: midi < 55 ? 7.8 : 5.6 },
+      { ratio: 2.001, gain: 0.26, duration: 2.4 },
+      { ratio: 3.006, gain: 0.085, duration: 1.45 },
+      { ratio: 4.014, gain: 0.025, duration: 0.8 },
+    ];
+    let remaining = partials.length;
+    for (const partial of partials) {
+      const oscillator = context.createOscillator();
+      const envelope = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12) * partial.ratio;
+      oscillator.detune.value = Math.sin(midi * 0.7 + partial.ratio) * 0.22;
+      const volume = velocity * partial.gain;
+      envelope.gain.setValueAtTime(0, at);
+      envelope.gain.linearRampToValueAtTime(volume, at + 0.008);
+      envelope.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume * 0.22),
+        at + Math.min(0.65, partial.duration * 0.35),
+      );
+      envelope.gain.exponentialRampToValueAtTime(0.0001, at + partial.duration);
+      oscillator.connect(envelope).connect(pan);
+      oscillator.start(at);
+      oscillator.stop(at + partial.duration + 0.05);
+      voices.add(oscillator);
+      pianoVoices.set(oscillator, envelope);
+      oscillator.onended = () => {
+        voices.delete(oscillator);
+        pianoVoices.delete(oscillator);
+        oscillator.disconnect();
+        envelope.disconnect();
+        if (--remaining === 0) {
+          pan.disconnect();
+          filter.disconnect();
+        }
+      };
+    }
+  }
+
+  function releasePiano() {
+    if (!context) return;
+    for (const [oscillator, envelope] of pianoVoices) {
+      envelope.gain.cancelScheduledValues(context.currentTime);
+      envelope.gain.setTargetAtTime(0.0001, context.currentTime, 0.045);
+      try {
+        oscillator.stop(context.currentTime + 0.24);
+      } catch {
+        /* A note may already have ended. */
+      }
+    }
+  }
 
   function tone(
     midi: number,
@@ -77,7 +210,7 @@ export function createAudio() {
   function mix() {
     if (!context) return;
     musicBus?.gain.setTargetAtTime(
-      settings.music ? settings.musicVolume * 0.24 : 0,
+      settings.music ? settings.musicVolume * 0.4 : 0,
       context.currentTime,
       0.12,
     );
@@ -92,17 +225,27 @@ export function createAudio() {
     timer = undefined;
     if (!context || !musicBus || !settings.music || document.hidden || disposed || !unlocked)
       return;
-    const notes = scales[biome];
-    // Slow suspended chords and a sparse pentatonic melody leave room for the world.
-    if (beat % 4 === 0) {
-      const chord = Math.floor(beat / 4) % 3;
-      for (const offset of [0, 2, 4])
-        tone(notes[(chord + offset) % notes.length] - 12, 8, 0.11, musicBus);
+    nextNoteAt ??= context.currentTime + 0.18;
+    const wait = nextNoteAt - context.currentTime;
+    if (wait > 0.025) {
+      timer = setTimeout(schedule, wait * 1000);
+      return;
     }
-    const melody = [4, 6, 3, 5, 7, 4, 2, 5, 6, 3, 4, 1];
-    if (beat % 3 !== 2) tone(notes[melody[beat % melody.length]], 3.2, 0.18, musicBus);
-    beat++;
-    timer = setTimeout(schedule, 1900);
+    const chord = harmonies[biome][phraseNumber % harmonies[biome].length];
+    const phrase = phrases[(phraseNumber + Math.floor(phraseNumber / 4)) % phrases.length];
+    const event = phrase[phraseStep];
+    const touch = 0.95 + Math.sin(phraseNumber * 1.7 + phraseStep * 2.3) * 0.07;
+    event.tones.forEach((degree, index) =>
+      piano(chord[degree] + event.octave, event.velocity * touch, index * 0.075),
+    );
+    nextNoteAt =
+      context.currentTime + event.pause * (1 + Math.sin(phraseNumber + phraseStep * 1.3) * 0.035);
+    phraseStep++;
+    if (phraseStep === phrase.length) {
+      phraseStep = 0;
+      phraseNumber++;
+    }
+    timer = setTimeout(schedule, Math.max(25, (nextNoteAt - context.currentTime) * 1000));
   }
   async function unlock() {
     if (disposed || document.hidden) return;
@@ -110,9 +253,14 @@ export function createAudio() {
       if (!context) {
         context = new AudioContext();
         musicBus = context.createGain();
+        pianoBus = context.createGain();
         effectsBus = context.createGain();
+        musicBus.gain.value = 0;
+        effectsBus.gain.value = 0;
         musicBus.connect(context.destination);
+        pianoBus.connect(musicBus);
         effectsBus.connect(context.destination);
+        createRoom();
         mix();
       }
       await context.resume();
@@ -135,6 +283,7 @@ export function createAudio() {
   return {
     getSettings: () => ({ ...settings }),
     update(next: Partial<AudioSettings>) {
+      const wasPlaying = settings.music;
       settings = { ...settings, ...next };
       settings.musicVolume = Math.min(1, Math.max(0, settings.musicVolume));
       settings.effectsVolume = Math.min(1, Math.max(0, settings.effectsVolume));
@@ -144,14 +293,25 @@ export function createAudio() {
         /* Keep session settings. */
       }
       mix();
-      clearTimeout(timer);
-      timer = undefined;
-      if (settings.music) {
+      if (wasPlaying && !settings.music) {
+        clearTimeout(timer);
+        timer = undefined;
+        releasePiano();
+      } else if (!wasPlaying && settings.music) {
+        nextNoteAt = undefined;
         void unlock();
       }
     },
     setBiome(next: BiomeId) {
+      if (next === biome) return;
       biome = next;
+      phraseNumber = 0;
+      phraseStep = 0;
+      nextNoteAt = undefined;
+      releasePiano();
+      clearTimeout(timer);
+      timer = undefined;
+      if (unlocked) schedule();
     },
     play(sound: Sound) {
       if (!context || !effectsBus || !settings.effects || document.hidden) return;

@@ -11,6 +11,9 @@ import {
   RECIPES,
   LIFECYCLE,
   EXPEDITION_SECONDS,
+  EXPEDITION_COOLDOWN_HOURS,
+  EXPEDITIONS_PER_DAY,
+  getExplorationAvailability,
   MAX_OFFLINE_HOURS,
   createGame,
   advanceTime,
@@ -48,7 +51,7 @@ function collection(count: number): GameState {
   return state;
 }
 
-test('new games begin with an egg, ingredients and one prepared meal', () => {
+test('new games begin with an egg, no points or ingredients and one prepared meal', () => {
   const state = createGame(NOW);
   assert.equal(state.version, 3);
   assert.equal(state.pet.name, 'Nubi');
@@ -56,7 +59,9 @@ test('new games begin with an egg, ingredients and one prepared meal', () => {
   assert.equal(state.currentBiome, 'forest');
   assert.equal(state.pet.biome, 'forest');
   assert.equal(state.inventory.food['fruit-bowl'], 1);
-  assert.equal(state.inventory.materials.berries, 2);
+  assert.equal(state.coins, 0);
+  assert.ok(Object.values(state.inventory.materials).every((amount) => amount === 0));
+  assert.deepEqual(state.explorationStarts, []);
   assert.equal(BIOMES.length, 3);
   assert.equal(MATERIALS.length, 5);
   assert.equal(RECIPES.length, 3);
@@ -110,7 +115,7 @@ test('egg affection never skips incubation or farms bond, experience or resource
   assert.equal(state.pet.bond, egg.pet.bond);
   assert.equal(state.xp, 0);
   assert.equal(state.activities, 0);
-  assert.equal(state.coins, 80);
+  assert.equal(state.coins, 0);
   assert.equal(serializeSave(egg), before);
 });
 
@@ -235,6 +240,7 @@ test('several generations retain distinct identities and survive saving and visi
 
 test('cooking spends exact ingredients atomically and selects the resulting dish', () => {
   const state = young();
+  state.inventory.materials = { berries: 2, grain: 1, kelp: 0, root: 0, herb: 1 };
   const before = serializeSave(state);
   const missing = craftFood(state, 'sea-soup', state.lastUpdated);
   assert.equal(missing.success, false);
@@ -500,9 +506,9 @@ test('minigame records preserve real scores while local rewards remain bounded',
   const state = young();
   const result = rewardMiniGame(state, 125.8, state.lastUpdated);
   assert.equal(result.state.miniGameBest, 125);
-  assert.equal(result.reward, 35);
+  assert.equal(result.reward, 5);
   assert.equal(result.state.xp, 25);
-  assert.equal(state.coins, 80);
+  assert.equal(state.coins, 0);
   assert.equal(rewardMiniGame(state, -1, state.lastUpdated).reward, 0);
   assert.equal(rewardMiniGame(state, Number.NaN, state.lastUpdated).reward, 0);
   assert.equal(
@@ -673,11 +679,11 @@ test('starter choices preserve the same care resources and progression as ordina
     const fed = applyCare(youngPet, 'feed', youngPet.lastUpdated);
     assert.equal(fed.success, true);
     assert.equal(fed.state.inventory.food['fruit-bowl'], 0);
-    assert.equal(fed.state.coins, 80);
+    assert.equal(fed.state.coins, 0);
     assert.equal(fed.state.pet.diet['fruit-bowl'], 1);
     const played = rewardMiniGame(fed.state, 2, fed.state.lastUpdated);
-    assert.equal(played.reward, 7);
-    assert.equal(played.state.coins, 87);
+    assert.equal(played.reward, 1);
+    assert.equal(played.state.coins, 1);
   }
 });
 
@@ -828,6 +834,125 @@ test('decoration saves reject unknown, duplicated or malformed ownership', () =>
   for (const decorations of [null, ['unknown'], ['lantern', 'lantern'], {}, 'lantern']) {
     const state = createGame(NOW);
     (state as any).decorations = decorations;
+    assert.equal(parseSave(serializeSave(state), NOW), null);
+  }
+});
+
+test('minigames grant at most five earned points and never supply food or ingredients', () => {
+  const state = baby();
+  for (const [score, expected] of [
+    [0, 0],
+    [1, 1],
+    [5, 1],
+    [6, 2],
+    [20, 4],
+    [25, 5],
+    [125, 5],
+    [1_000_000_000, 5],
+  ]) {
+    const before = serializeSave(state);
+    const result = rewardMiniGame(state, score, state.lastUpdated);
+    assert.equal(result.reward, expected);
+    assert.equal(result.state.coins - state.coins, expected);
+    assert.deepEqual(result.state.inventory, state.inventory);
+    assert.equal(serializeSave(state), before);
+  }
+  const stateWithEarnedPoints = { ...state, coins: 137 };
+  assert.equal(rewardMiniGame(stateWithEarnedPoints, 100, state.lastUpdated).state.coins, 142);
+});
+
+test('exploration has two departure slots per rolling day and an eight-hour cooldown', () => {
+  assert.equal(EXPEDITIONS_PER_DAY, 2);
+  assert.equal(EXPEDITION_COOLDOWN_HOURS, 8);
+  const initial = createGame(NOW);
+  assert.deepEqual(getExplorationAvailability(initial, NOW), {
+    remaining: 2,
+    nextAvailableAt: NOW,
+    canStart: true,
+  });
+  const before = serializeSave(initial);
+  const first = startExpedition(initial, [], NOW);
+  assert.equal(first.success, true);
+  assert.equal(serializeSave(initial), before);
+  assert.deepEqual(first.state.explorationStarts, [NOW]);
+  assert.equal(getExplorationAvailability(first.state, NOW + 8 * HOUR).canStart, false);
+  const claimed = completeExpedition(first.state, NOW + EXPEDITION_SECONDS * 1000).state;
+  assert.deepEqual(getExplorationAvailability(claimed, claimed.lastUpdated), {
+    remaining: 1,
+    nextAvailableAt: NOW + 8 * HOUR,
+    canStart: false,
+  });
+  assert.equal(startExpedition(claimed, [], NOW + 8 * HOUR - 1).success, false);
+  assert.deepEqual(claimed.explorationStarts, [NOW]);
+  const second = startExpedition(claimed, [], NOW + 8 * HOUR);
+  assert.equal(second.success, true);
+  assert.deepEqual(second.state.explorationStarts, [NOW, NOW + 8 * HOUR]);
+  const secondClaimed = completeExpedition(second.state, second.state.expedition!.endsAt).state;
+  assert.deepEqual(getExplorationAvailability(secondClaimed, NOW + 16 * HOUR), {
+    remaining: 0,
+    nextAvailableAt: NOW + 24 * HOUR,
+    canStart: false,
+  });
+  assert.equal(startExpedition(secondClaimed, [], NOW + 24 * HOUR - 1).success, false);
+  const third = startExpedition(secondClaimed, [], NOW + 24 * HOUR);
+  assert.equal(third.success, true);
+  assert.deepEqual(third.state.explorationStarts, [NOW + 8 * HOUR, NOW + 24 * HOUR]);
+  const thirdClaimed = completeExpedition(third.state, third.state.expedition!.endsAt).state;
+  assert.equal(getExplorationAvailability(thirdClaimed, NOW + 32 * HOUR).canStart, true);
+});
+
+test('exploration restrictions survive saving, travel, pet release and a backwards clock', () => {
+  const initial = adult();
+  const at = initial.lastUpdated;
+  const first = startExpedition(initial, [], at).state;
+  const claimed = completeExpedition(first, first.expedition!.endsAt).state;
+  const traveled = changeBiome(claimed, 'coast', claimed.lastUpdated);
+  const released = releaseAdult(traveled, traveled.lastUpdated).state;
+  const restored = parseSave(serializeSave(released), released.lastUpdated)!;
+  assert.deepEqual(restored.explorationStarts, [at]);
+  assert.deepEqual(getExplorationAvailability(restored, at - HOUR), {
+    remaining: 1,
+    nextAvailableAt: at + 8 * HOUR,
+    canStart: false,
+  });
+  assert.equal(startExpedition(restored, [], at - HOUR).success, false);
+  assert.equal(startExpedition(restored, [], at + 8 * HOUR).success, true);
+  assert.equal(getExplorationAvailability(advanceTime(restored, at + 48 * HOUR)).remaining, 2);
+});
+
+test('older saves preserve points and resources while adopting exploration restrictions', () => {
+  const state = createGame(NOW);
+  state.coins = 115;
+  state.inventory.materials.berries = 9;
+  const old = JSON.parse(serializeSave(state));
+  delete old.explorationStarts;
+  const restored = parseSave(JSON.stringify(old), NOW)!;
+  assert.equal(restored.coins, 115);
+  assert.equal(restored.inventory.materials.berries, 9);
+  assert.deepEqual(restored.explorationStarts, []);
+  const active = startExpedition(state, [], NOW).state;
+  const oldActive = JSON.parse(serializeSave(active));
+  delete oldActive.explorationStarts;
+  const resumed = parseSave(JSON.stringify(oldActive), NOW)!;
+  assert.deepEqual(resumed.explorationStarts, [NOW]);
+  const claimed = completeExpedition(resumed, resumed.expedition!.endsAt).state;
+  assert.equal(getExplorationAvailability(claimed, claimed.lastUpdated).remaining, 1);
+  assert.equal(startExpedition(claimed, [], NOW + HOUR).success, false);
+});
+
+test('invalid exploration histories are rejected without accepting arbitrary timestamps', () => {
+  for (const history of [
+    null,
+    {},
+    'none',
+    [NOW + 1],
+    [-1],
+    [NOW, NOW],
+    [NOW, NOW - 1],
+    [NOW - 2, NOW - 1, NOW],
+  ]) {
+    const state = createGame(NOW);
+    (state as any).explorationStarts = history;
     assert.equal(parseSave(serializeSave(state), NOW), null);
   }
 });

@@ -11,7 +11,7 @@ Xisverso combina **Xisver + universo**. Es un juego de mascotas originales: incu
 - Acariciar tantas veces como quieras; después de nacer, alimentar, bañar y ayudar a descansar.
 - Dejar libre a un adulto y cuidar otro huevo. Los adultos permanecen en tu colección, pueden acompañar expediciones y aparecen ocasionalmente en su bioma.
 - Viajar entre Bosque Susurro, Costa Nácar y Tundra Aurora conservando el origen y los rasgos de cada mascota.
-- Explorar con hasta tres adultos libres, reunir ingredientes y preparar tres recetas.
+- Explorar con hasta tres adultos libres, reunir ingredientes y preparar tres recetas. Puedes hacer dos salidas cada 24 horas, separadas por ocho horas.
 - Jugar seis minijuegos de 20 segundos en los que participa tu mascota.
 - Ganar puntos jugando y comprar seis decoraciones para el mundo, sin dinero real.
 - Escuchar música ambiental propia de cada bioma y efectos de sonido, con controles independientes.
@@ -21,31 +21,23 @@ Xisverso combina **Xisver + universo**. Es un juego de mascotas originales: incu
 
 La primera vez aparece una bienvenida para escoger huevo y hogar. La crianza empieza al pulsar **Comenzar nuestra historia**. Esperar o cambiar opciones antes de confirmar no guarda ni incuba una partida parcial. Una partida válida entra directamente al refugio.
 
-Toca el huevo para darle cariño. Cuando nazca, toca el suelo para caminar y elige Caricias, Alimentar, Burbujas o Siesta antes de tocar a la mascota. También puedes arrastrar una herramienta hasta ella. Al pulsar **Alimentar** se abre encima del botón un menú para **Cocinar** o **Elegir alimento**. Seleccionar una herramienta o una ración no consume recursos; alimentar consume una porción preparada.
+Toca el huevo para darle cariño. Cuando nazca, toca el suelo para caminar y elige Caricias, Alimentar, Burbujas o Siesta antes de tocar a la mascota. También puedes arrastrar una herramienta hasta ella. Al pulsar **Alimentar** aparece una ficha pequeña con la ración elegida y el Apetito que recupera. La flecha **>** permite cambiar el alimento y abrir la cocina. Seleccionar una herramienta o una ración no consume recursos; alimentar consume una porción preparada.
 
-Pulsa el nombre de tu compañero para consultar **Apetito**, energía, higiene, ánimo y crecimiento. Todas las necesidades usan la misma orientación: **100 es bienestar y 0 requiere cuidados**. En Apetito, 100 significa que está lleno y 0 que tiene mucha hambre. Comer lo aumenta; el tiempo lo reduce lentamente.
+Pulsa el nombre de tu compañero para consultar **Apetito**, energía, higiene, ánimo y crecimiento. Comer recupera Apetito; el tiempo lo reduce lentamente.
 
-El crecimiento usa tiempo real:
-
-| Etapa          | Duración antes de la siguiente |
-| -------------- | ------------------------------ |
-| Huevo → bebé   | 5 horas                        |
-| Bebé → joven   | 20 horas                       |
-| Joven → adulto | 3 días                         |
-
-El tiempo transcurre también con el juego cerrado. Los cuidados, la comida y los minijuegos no acortan esas etapas. Las caricias siguen disponibles con el ánimo lleno y no aumentan vínculo, experiencia ni crecimiento. Las necesidades bajan lentamente según la etapa y el bioma; al regresar se limita el deterioro a ocho horas despierto, sin muerte permanente.
+Tu mascota sigue creciendo incluso con el juego cerrado. Las caricias siguen disponibles con el ánimo lleno y no aumentan vínculo, experiencia ni crecimiento. Las necesidades bajan lentamente según la etapa y el bioma, sin muerte permanente.
 
 El bebé es una pequeña forma redonda o flotante con ojos y sin extremidades. El joven desarrolla más rasgos y extremidades pequeñas; el adulto tiene su estructura completa. La mascota ocupa menos pantalla y cambia de escala según la profundidad al caminar. Las mascotas libres aparecen en visitas breves de hasta 24 segundos por ciclo de 180 segundos; la colección sigue disponible aunque no estén en la escena.
 
-El letrero **Explorar** inicia una salida y permite recoger los materiales al terminar. La cocina muestra ingredientes, recetas y raciones. La dieta se registra, pero todavía no decide ramas de evolución ni cambios de aspecto.
+El letrero **Explorar** inicia una salida y permite recoger los materiales al terminar. Es la única fuente de ingredientes nuevos; el panel muestra las salidas disponibles y la espera hasta la siguiente. La cocina muestra ingredientes, recetas y raciones. La dieta se registra, pero todavía no decide ramas de evolución ni cambios de aspecto.
 
 ## Juegos, puntos y sonido
 
-**Jugar** ofrece Luciérnagas en compañía, Lluvia de frutas, Salta los charcos, Baile del bosque, Sendero de recuerdos y Pelota al claro. Tu mascota recoge, salta, baila, recuerda o empuja según el juego. Cada sesión dura 20 segundos; los puntos se entregan una sola vez al terminar y salir antes no concede premios. El huevo podrá participar después de nacer.
+**Jugar** ofrece Luciérnagas en compañía, Lluvia de frutas, Salta los charcos, Baile del bosque, Sendero de recuerdos y Pelota al claro. Tu mascota recoge, salta, baila, recuerda o empuja según el juego. Cada sesión dura 20 segundos; completar una partida con aciertos entrega entre 1 y 5 puntos, una sola vez. Salir antes no concede premios ni ingredientes. El huevo podrá participar después de nacer.
 
-Los puntos permiten comprar un jardín de flores, un farol, setas luminosas, un banco, una fuente y un arco. Las compras se guardan, no se duplican y sus elementos aparecen en el mundo. No hay compras con dinero real.
+Las partidas nuevas empiezan sin puntos y con una ración preparada de bienvenida. Los puntos permiten comprar un jardín de flores, un farol, setas luminosas, un banco, una fuente y un arco. Las compras se guardan, no se duplican y sus elementos aparecen en el mundo. No hay compras con dinero real.
 
-La música y los efectos se generan con Web Audio, sin descargar pistas ni usar servicios externos. El navegador inicia el audio después de una interacción. Puedes activar o silenciar música y efectos por separado y ajustar sus volúmenes; las preferencias se conservan y el audio se pausa al ocultar la página.
+La música ambiental combina piano suave, frases espaciadas y una reverberación ligera. Es una composición original generada con Web Audio, al igual que los efectos, sin descargar pistas ni usar servicios externos. El navegador inicia el audio después de una interacción. Puedes activar o silenciar música y efectos por separado y ajustar sus volúmenes; las preferencias se conservan y el audio se pausa al ocultar la página.
 
 ## Guardados y visitas
 

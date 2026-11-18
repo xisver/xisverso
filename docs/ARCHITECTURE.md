@@ -29,7 +29,7 @@ Si no hay una partida v3 válida ni respaldos v2 o v1 recuperables, la interfaz 
 
 ## Etapas y reloj
 
-La etapa se deriva de `growthSeconds`: huevo durante 18 000 segundos, bebé durante los siguientes 72 000 y joven durante los siguientes 259 200. La etapa adulta comienza a las 97 horas acumuladas. `getLifeProgress` expresa el progreso relativo, el tiempo restante y la siguiente etapa.
+La etapa se deriva de `growthSeconds`: huevo durante 18 000 segundos, bebé durante los siguientes 72 000 y joven durante los siguientes 259 200. La etapa adulta comienza a las 97 horas acumuladas. Estas duraciones siguen siendo reglas internas. `getLifeProgress` expone el progreso relativo, el tiempo restante y la siguiente etapa; la interfaz muestra etapa y porcentaje, sin horas restantes ni explicaciones de cuánto tarda la evolución.
 
 El crecimiento usa todo el tiempo real transcurrido, también con el juego cerrado. Comida, cuidados y juegos no añaden segundos de crecimiento. Las caricias siempre se aceptan, incluso con el ánimo lleno, y no producen vínculo, XP ni progreso adicional. Los relojes atrasados o inválidos no rejuvenecen ni restauran necesidades.
 
@@ -37,23 +37,29 @@ Al liberar un adulto se conserva en `freePets` y se crea un huevo con una identi
 
 ## Necesidades, alimentación y puntos
 
-Todas las necesidades están entre 0 y 100 y expresan bienestar. `needs.appetite` vale 100 cuando la mascota está llena y 0 cuando tiene mucha hambre; comer lo aumenta. Energía, higiene y ánimo también empeoran al bajar.
+Todas las necesidades están entre 0 y 100 y expresan bienestar. Internamente, `needs.appetite` vale 100 cuando la mascota está llena y 0 cuando tiene mucha hambre; comer lo aumenta. Energía, higiene y ánimo también empeoran al bajar. La interfaz conserva el valor y la barra de Apetito, sin la explicación de sus extremos.
 
 El deterioro es lento y depende del bioma y de la etapa. Se integra el tiempo efectivo a cada lado de una transición de etapa. Una ausencia aplica como máximo ocho horas despierto de deterioro, aunque la edad continúa avanzando durante toda la ausencia. Los huevos no sufren ese deterioro y no hay muerte permanente.
 
-Cocinar verifica todos los ingredientes y los consume de manera atómica. Alimentar consume una porción de la receta seleccionada y la registra en `pet.diet`; elegir herramienta o alimento no consume recursos. El botón Alimentar despliega arriba las acciones Cocinar y Elegir alimento. La dieta sigue disponible para un futuro diseño de evoluciones alimentarias.
+Cocinar verifica todos los ingredientes y los consume de manera atómica. Alimentar consume una porción de la receta seleccionada y la registra en `pet.diet`; elegir herramienta o alimento no consume recursos. El botón Alimentar despliega una ficha compacta con el nombre de la comida elegida, cuánto Apetito recupera y una flecha `>` para cambiarla. El selector de alimento permite acceder a la cocina. La dieta sigue disponible para un futuro diseño de evoluciones alimentarias.
 
-`coins` representa los puntos locales. Los minijuegos los entregan al terminar; `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
+Una partida nueva empieza con cero puntos y cero ingredientes, además de una ración de bienvenida. Los guardados anteriores conservan los recursos que ya tenían. Los ingredientes nuevos proceden únicamente de explorar; los minijuegos no entregan materiales ni comida.
+
+`coins` representa los puntos locales. Completar un minijuego con al menos un acierto entrega entre uno y cinco puntos; una partida sin aciertos o cancelada no da puntos. `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
 
 ## Exploraciones persistentes
 
 Una expedición conserva ID, bioma de salida, horas inicial y final, hasta tres adultos libres diferentes y sus materiales previstos. La recompensa y el grupo se fijan al salir. Viajar o recargar no cambia esos datos ni reinicia el reloj. Solo se reclama después de terminar y una sola vez.
+
+`explorationStarts` conserva los dos últimos inicios de expedición. `getExplorationAvailability` permite un máximo de dos salidas en una ventana móvil de 24 horas y exige ocho horas entre sus inicios. El límite pertenece a la partida, se conserva al recargar y no se reinicia al viajar ni al cambiar de día. Una expedición en marcha o pendiente de reclamar también impide iniciar otra.
 
 Se permite explorar con un huevo para reunir ingredientes antes de que nazca. Las expediciones y su economía pertenecen a la partida local y no son resultados validados por un servidor.
 
 ## Guardados y migración
 
 La clave actual es `xisverso.save.v3`, con `version: 3`. La recuperación busca v3, después v2 y finalmente v1, conservando los respaldos anteriores.
+
+El historial `explorationStarts: number[]` es una ampliación aditiva de v3: valida hasta dos marcas de tiempo finitas, ordenadas, únicas y no futuras. Los guardados anteriores sin historial empiezan con la lista vacía; si ya hay una expedición, su inicio se incorpora para conservar la espera correspondiente. La migración no elimina puntos, ingredientes, comida ni compras existentes.
 
 - v2: `100 - hunger` se convierte en Apetito. Se preservan las etapas alcanzadas y el progreso relativo dentro de ellas; un joven sigue siendo joven y un adulto sigue siendo adulto. Se mantienen adultos libres, inventario y expediciones legítimas.
 - v1: el antiguo campo `hunger` representaba saciedad y se conserva como Apetito. La mascota previa permanece adulta y mantiene identidad, recursos y logros.
@@ -76,11 +82,13 @@ El huevo no camina; bebés, jóvenes y adultos pueden seguir un destino. El bot�
 
 Las sesiones duran 20 segundos. Luciérnagas en compañía exige que la mascota llegue a la luz; Lluvia de frutas usa la posición de la mascota para recoger; Salta los charcos comprueba el salto; Baile del bosque comprueba dirección y compás; Sendero de recuerdos comprueba una secuencia que la mascota recorre; Pelota al claro usa contacto y empuje hacia una meta.
 
-La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola vez al terminar. Salir antes cancela la actividad sin recompensa. Un huevo espera a nacer para jugar. Cada actividad mantiene controles táctiles y alternativas de teclado; no se valida una recompensa por un simple cambio de contador visual.
+La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola vez al terminar. La recompensa se limita a uno a cinco puntos y no añade ingredientes ni raciones. Salir antes o terminar sin aciertos no entrega puntos. Un huevo espera a nacer para jugar. Cada actividad mantiene controles táctiles y alternativas de teclado; no se valida una recompensa por un simple cambio de contador visual.
 
 ## Sonido
 
-Web Audio genera notas, acordes y efectos propios sin archivos externos. El contexto se inicia tras un gesto del usuario. Música y efectos tienen activación y volumen independientes; las preferencias usan `xisverso.audio.v1`. El bioma selecciona la paleta musical. Ocultar la página suspende el contexto y la programación de notas.
+Web Audio sintetiza piano ambiental original mediante armónicos, ataque breve y caída larga. Las frases espaciadas combinan acordes suaves, pausas amplias y una reverberación procedural; no utilizan melodías, muestras ni archivos externos. El bioma selecciona la paleta armónica.
+
+El contexto se inicia tras un gesto del usuario. Música y efectos tienen activación y volumen independientes; las preferencias usan `xisverso.audio.v1`. Cambiar el volumen no reinicia la frase. Ocultar la página suspende el contexto y la programación de notas.
 
 ## Visitas opcionales con Firebase
 

@@ -68,6 +68,8 @@ try {
   assert.equal(before.pet.biome, 'coast');
   assert.equal(before.currentBiome, 'coast');
   assert.equal(before.pet.seed % 3, 2);
+  assert.equal(before.coins, 0);
+  assert.deepEqual(Object.values(before.inventory.materials), [0, 0, 0, 0, 0]);
   await page.getByRole('button', { name: 'Caricias', exact: true }).click();
   const pet = await page.locator('#pet-interact').boundingBox();
   assert.ok(pet);
@@ -78,7 +80,16 @@ try {
   assert.ok(warmed.pet.growthSeconds - before.pet.growthSeconds < 5);
   await page.getByRole('button', { name: 'Alimentar', exact: true }).click();
   await expect(page.locator('#food-options')).toBeVisible();
-  await page.locator('#food-options').getByRole('button', { name: 'Cocinar', exact: true }).click();
+  await expect(page.locator('#selected-food-name')).toHaveText('Cuenco de bayas');
+  await expect(page.locator('#selected-food-recovery')).toHaveText('+32 Apetito');
+  await page
+    .locator('#food-options')
+    .getByRole('button', { name: 'Cambiar alimento', exact: true })
+    .click();
+  await page
+    .locator('#food-dialog')
+    .getByRole('button', { name: 'Cocinar más raciones', exact: true })
+    .click();
   await expect(page.locator('#kitchen-dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.reload();
@@ -89,7 +100,7 @@ try {
   assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: recursos, bienvenida, huevo, bioma, caricias sin acelerar, menú de comida y guardado v3 funcionan bajo /xisverso/.',
+    'PAGES_OK: recursos, bienvenida, huevo, bioma, caricias sin acelerar, ficha compacta de alimento y guardado v3 funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();
