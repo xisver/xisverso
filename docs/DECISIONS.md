@@ -54,9 +54,9 @@ Los puntos locales obtenidos en los minijuegos (`coins`) permiten comprar seis d
 
 ## Ambiente sonoro
 
-Web Audio genera piano ambiental original por bioma y efectos de interacción. El piano usa armónicos suaves, ataque breve, caída larga, acordes espaciados, reverberación y pausas amplias. No copia melodías ni necesita muestras, descargas o servicios de audio. La música empieza después de una interacción permitida por el navegador.
+La música ambiental usa las cuatro canciones proporcionadas por el propietario, alojadas junto al juego en `public/audio/`. Se reproducen por rondas aleatorias sin repetición inmediata, con independencia del bioma. No requiere un servicio de música externo. Los efectos de interacción se siguen generando con Web Audio. La música empieza después de una interacción permitida por el navegador.
 
-Música y efectos tienen activación y volumen independientes. Las preferencias persisten localmente y ocultar la página pausa el audio para evitar que siga sonando en segundo plano.
+Música y efectos tienen activación y volumen independientes. Las preferencias persisten localmente. Ocultar la página o desactivar la música pausa la canción, que se retoma desde el mismo punto; viajar conserva la reproducción.
 
 ## Persistencia y visitas
 

@@ -14,7 +14,7 @@ Xisverso combina **Xisver + universo**. Es un juego de mascotas originales: incu
 - Explorar cuando tu mascota principal sea adulta, con hasta tres adultos libres como acompañantes, reunir ingredientes y preparar tres recetas. Puedes hacer dos salidas al día, separadas por ocho horas.
 - Jugar seis minijuegos de 20 segundos en los que participa tu mascota.
 - Ganar puntos jugando y comprar seis decoraciones para el mundo, sin dinero real.
-- Escuchar música ambiental propia de cada bioma y efectos de sonido, con controles independientes.
+- Escuchar cuatro canciones en orden aleatorio y efectos de sonido, con controles independientes.
 - Compartir una vista de tu refugio y visitar el de un amigo mediante un código con Firebase.
 
 ## Cómo jugar
@@ -37,7 +37,7 @@ El letrero **Explorar** permite salir cuando tu mascota principal sea adulta y r
 
 Las partidas nuevas empiezan sin puntos ni ingredientes y con una ración preparada de bienvenida. Los puntos obtenidos en los minijuegos permiten comprar un jardín de flores, un farol, setas luminosas, un banco, una fuente y un arco. Las compras se guardan, no se duplican y sus elementos aparecen en el mundo. No hay compras con dinero real.
 
-La música ambiental combina piano suave, frases espaciadas y una reverberación ligera. Es una composición original generada con Web Audio, al igual que los efectos, sin descargar pistas ni usar servicios externos. El navegador inicia el audio después de una interacción. Puedes activar o silenciar música y efectos por separado y ajustar sus volúmenes; las preferencias se conservan y el audio se pausa al ocultar la página.
+La música de fondo reproduce las cuatro canciones proporcionadas para el juego: **Pixel Peace**, **Pixel Peace (versión alternativa)**, **Lofi Christmas (Remix)** y **Morning Nap in the Garden**. La lista se baraja y recorre las cuatro canciones antes de volver a mezclarse, evitando repetir inmediatamente la última. Cambiar de bioma conserva la canción. Los archivos se sirven con el juego y se cargan conforme se necesitan; los efectos siguen generándose con Web Audio. El navegador inicia el audio después de una interacción. Puedes activar o silenciar música y efectos por separado y ajustar sus volúmenes; las preferencias se conservan. Ocultar la página o desactivar la música pausa la pista y permite retomarla desde el mismo punto.
 
 ## Guardados y visitas
 

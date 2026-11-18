@@ -1098,6 +1098,165 @@ test('música y efectos se silencian por separado y conservan sus volúmenes', a
   await expect(page.locator('#effects-volume')).toHaveValue('61');
 });
 
+test('la música espera un gesto y reproduce las cuatro canciones sin repetir hasta completar la ronda', async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/audio/')) requests.push(request.url());
+  });
+  await page.goto('/');
+  await expect(page.locator('#welcome-dialog')).toBeVisible();
+  const music = page.locator('#background-music');
+  await expect(music).toHaveCount(1);
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).paused)).toBe(true);
+  expect(await music.getAttribute('src')).toBeNull();
+  expect(requests).toEqual([]);
+  await page.getByRole('button', { name: 'Comenzar nuestra historia', exact: true }).click();
+  await expect
+    .poll(() =>
+      music.evaluate(
+        (element) =>
+          !(element as HTMLAudioElement).paused && (element as HTMLAudioElement).currentTime > 0,
+      ),
+    )
+    .toBe(true);
+  const tracks = [
+    await music.evaluate((element) => new URL((element as HTMLAudioElement).currentSrc).pathname),
+  ];
+  for (let index = 0; index < 4; index++) {
+    const previous = tracks.at(-1)!;
+    await music.evaluate((element) =>
+      (element as HTMLAudioElement).dispatchEvent(new Event('ended')),
+    );
+    await expect
+      .poll(() =>
+        music.evaluate(
+          (element) =>
+            new URL((element as HTMLAudioElement).getAttribute('src') ?? '', document.baseURI)
+              .pathname,
+        ),
+      )
+      .not.toBe(previous);
+    await expect
+      .poll(() =>
+        music.evaluate(
+          (element) =>
+            !(element as HTMLAudioElement).paused &&
+            (element as HTMLAudioElement).readyState >= 2 &&
+            (element as HTMLAudioElement).currentTime > 0,
+        ),
+      )
+      .toBe(true);
+    const next = await music.evaluate(
+      (element) => new URL((element as HTMLAudioElement).currentSrc).pathname,
+    );
+    expect(next).not.toBe(previous);
+    tracks.push(next);
+  }
+  expect([...new Set(tracks.slice(0, 4))].sort()).toEqual([
+    '/audio/lofi-christmas-remix.mp3',
+    '/audio/morning-nap-in-the-garden.mp3',
+    '/audio/pixel-peace-alternativa.mp3',
+    '/audio/pixel-peace.mp3',
+  ]);
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).error)).toBeNull();
+});
+
+test('la canción conserva su posición al silenciar, cambiar de bioma y ocultar el juego', async ({
+  page,
+}) => {
+  await gotoGame(page);
+  const music = page.locator('#background-music');
+  await expect
+    .poll(() =>
+      music.evaluate(
+        (element) =>
+          !(element as HTMLAudioElement).paused && (element as HTMLAudioElement).readyState >= 2,
+      ),
+    )
+    .toBe(true);
+  const track = await music.evaluate((element) => (element as HTMLAudioElement).currentSrc);
+  await music.evaluate((element) => {
+    (element as HTMLAudioElement).currentTime = 12;
+  });
+  await page.getByRole('button', { name: 'Sonido y música', exact: true }).click();
+  await page.locator('#music-enabled').uncheck();
+  await expect
+    .poll(() => music.evaluate((element) => (element as HTMLAudioElement).paused))
+    .toBe(true);
+  await expect(page.locator('#effects-enabled')).toBeChecked();
+  const pausedAt = await music.evaluate((element) => (element as HTMLAudioElement).currentTime);
+  await page.waitForTimeout(150);
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).currentTime)).toBe(
+    pausedAt,
+  );
+  await page.locator('#music-enabled').check();
+  await expect
+    .poll(() => music.evaluate((element) => !(element as HTMLAudioElement).paused))
+    .toBe(true);
+  expect(
+    await music.evaluate((element) => (element as HTMLAudioElement).currentTime),
+  ).toBeGreaterThanOrEqual(pausedAt);
+  await page.keyboard.press('Escape');
+  await visitBiome(page, 'coast');
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).currentSrc)).toBe(track);
+  expect(
+    await music.evaluate((element) => (element as HTMLAudioElement).currentTime),
+  ).toBeGreaterThanOrEqual(pausedAt);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect
+    .poll(() => music.evaluate((element) => (element as HTMLAudioElement).paused))
+    .toBe(true);
+  const hiddenAt = await music.evaluate((element) => (element as HTMLAudioElement).currentTime);
+  await page.waitForTimeout(150);
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).currentTime)).toBe(
+    hiddenAt,
+  );
+  await page.evaluate(() => {
+    delete (document as unknown as Record<string, unknown>).hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect
+    .poll(() =>
+      music.evaluate(
+        (element, resumeFrom) =>
+          !(element as HTMLAudioElement).paused &&
+          (element as HTMLAudioElement).currentTime > resumeFrom,
+        hiddenAt,
+      ),
+    )
+    .toBe(true);
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).currentSrc)).toBe(track);
+});
+
+test('si una canción no carga la lista continúa con otra pista reproducible', async ({ page }) => {
+  let failed = '';
+  await page.route('**/audio/*.mp3', async (route) => {
+    if (!failed) {
+      failed = route.request().url();
+      await route.abort('failed');
+    } else await route.continue();
+  });
+  await gotoGame(page);
+  const music = page.locator('#background-music');
+  await expect
+    .poll(() =>
+      music.evaluate(
+        (element) =>
+          !(element as HTMLAudioElement).paused && (element as HTMLAudioElement).currentTime > 0,
+      ),
+    )
+    .toBe(true);
+  expect(failed).toContain('/audio/');
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).currentSrc)).not.toBe(
+    failed,
+  );
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).error)).toBeNull();
+});
 test('abrir visitas no inventa amigos ni conecta Firebase sin elegir una acción', async ({
   page,
 }) => {

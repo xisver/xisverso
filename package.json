@@ -1,7 +1,7 @@
 {
   "name": "xisverso",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Un mundo vivo de mascotas procedurales por XisSoft",
   "type": "module",
   "scripts": {

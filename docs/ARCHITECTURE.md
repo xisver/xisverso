@@ -8,7 +8,7 @@ El refugio Canvas 2D es la pantalla principal. La interfaz HTML añade herramien
 - `src/domain/game.test.ts`: invariantes, límites, inmutabilidad y persistencia.
 - `src/render/scene.ts`: dibujo procedural, etapas, profundidad, paseo, decoraciones y apariciones de residentes.
 - `src/minigames.ts`: seis actividades con movimiento de la mascota y condiciones propias de puntuación.
-- `src/audio.ts`: música procedural por bioma, efectos, mezcla y preferencias locales.
+- `src/audio.ts`: lista musical aleatoria, efectos sintetizados, mezcla y preferencias locales.
 - `src/social/firebase.ts`: conexión voluntaria, publicación de vistas y visitas por código.
 - `src/social/firebase.test.ts`: validación de datos compartidos y aislamiento de información local.
 - `src/main.ts`: entradas, diálogos, guardado y coordinación de actividades.
@@ -86,9 +86,9 @@ La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola
 
 ## Sonido
 
-Web Audio sintetiza piano ambiental original mediante armónicos, ataque breve y caída larga. Las frases espaciadas combinan acordes suaves, pausas amplias y una reverberación procedural; no utilizan melodías, muestras ni archivos externos. El bioma selecciona la paleta armónica.
+La música utiliza un reproductor HTML de audio y cuatro MP3 de `public/audio/`. Las rutas respetan `import.meta.env.BASE_URL` para desarrollo y GitHub Pages. Una ronda barajada reproduce todas las pistas antes de mezclar de nuevo y evita la repetición inmediata entre rondas. El reproductor carga la pista actual según se necesita, sin decodificar la colección completa en memoria. Los efectos de interacción siguen sintetizados con Web Audio.
 
-El contexto se inicia tras un gesto del usuario. Música y efectos tienen activación y volumen independientes; las preferencias usan `xisverso.audio.v1`. Cambiar el volumen no reinicia la frase. Ocultar la página suspende el contexto y la programación de notas.
+El audio se inicia tras un gesto del usuario y admite reintentar si el navegador bloquea la reproducción. Música y efectos tienen activación y volumen independientes; las preferencias usan `xisverso.audio.v1`. Cambiar el volumen o viajar no reinicia la pista. Ocultar la página o desactivar música pausa la reproducción; al volver se conserva su posición. Destruir el motor libera el reproductor, los eventos y el contexto de efectos.
 
 ## Visitas opcionales con Firebase
 

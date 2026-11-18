@@ -16,6 +16,7 @@ const types = {
   '.js': 'text/javascript',
   '.css': 'text/css',
   '.svg': 'image/svg+xml',
+  '.mp3': 'audio/mpeg',
 };
 const server = createServer(async (request, response) => {
   try {
@@ -61,6 +62,23 @@ try {
   await expect(page.locator('#welcome-dialog')).not.toBeVisible();
   await expect(page.locator('#pet-name')).toHaveText('Nubi');
   assert.equal((await page.request.get(origin + prefix + 'favicon.svg')).status(), 200);
+  const music = page.locator('#background-music');
+  await expect
+    .poll(() => music.evaluate((element) => !element.paused && element.currentTime > 0))
+    .toBe(true);
+  const musicPath = await music.evaluate((element) => new URL(element.currentSrc).pathname);
+  assert.ok(musicPath.startsWith(prefix + 'audio/'));
+  for (const filename of [
+    'pixel-peace.mp3',
+    'pixel-peace-alternativa.mp3',
+    'lofi-christmas-remix.mp3',
+    'morning-nap-in-the-garden.mp3',
+  ]) {
+    const response = await page.request.get(origin + prefix + 'audio/' + filename);
+    assert.equal(response.status(), 200);
+    assert.match(response.headers()['content-type'], /^audio\/mpeg/);
+    assert.ok((await response.body()).length > 1000);
+  }
   const saveKey = 'xisverso.save.v3';
   const before = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
   assert.equal(before.version, 3);
@@ -107,7 +125,7 @@ try {
   assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: recursos, bienvenida, ficha compacta, guardado v3 y exploración reservada al adulto funcionan bajo /xisverso/.',
+    'PAGES_OK: recursos, cuatro MP3 con reproducción, bienvenida, ficha compacta, guardado v3 y exploración reservada al adulto funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();
