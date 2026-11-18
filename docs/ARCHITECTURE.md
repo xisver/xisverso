@@ -7,7 +7,9 @@ El refugio Canvas 2D es la pantalla principal. La interfaz HTML añade herramien
 - `src/domain/game.ts`: reglas puras de cuidado, ciclo de vida, inventario, expediciones, cocina, compras y migración.
 - `src/domain/game.test.ts`: invariantes, límites, inmutabilidad y persistencia.
 - `src/render/scene.ts`: dibujo procedural, etapas, profundidad, paseo, decoraciones y apariciones de residentes.
-- `src/minigames.ts`: seis actividades con movimiento de la mascota y condiciones propias de puntuación.
+- `src/minigames.ts`: siete actividades con movimiento, ritmo musical y cocos de tres rondas.
+- `src/experiences.ts` y `src/experiences.css`: cocina interactiva y tienda en pantallas completas.
+- `src/expedition.ts`: animación de los adultos participantes sin modificar recompensas.
 - `src/audio.ts`: lista musical aleatoria, efectos sintetizados, mezcla y preferencias locales.
 - `src/social/firebase.ts`: conexión voluntaria, publicación de vistas y visitas por código.
 - `src/social/firebase.test.ts`: validación de datos compartidos y aislamiento de información local.
@@ -43,17 +45,25 @@ El deterioro es lento y depende del bioma y de la etapa. Se integra el tiempo ef
 
 Cocinar verifica todos los ingredientes y los consume de manera atómica. Alimentar consume una porción de la receta seleccionada y la registra en `pet.diet`; elegir herramienta o alimento no consume recursos. El botón Alimentar despliega una ficha compacta con el nombre de la comida elegida, cuánto Apetito recupera y una flecha `>` para cambiarla. El selector de alimento permite acceder a la cocina. La dieta sigue disponible para un futuro diseño de evoluciones alimentarias.
 
-Una partida nueva empieza con cero puntos y cero ingredientes, además de una ración de bienvenida. Los guardados anteriores conservan los recursos que ya tenían. Los ingredientes nuevos proceden únicamente de explorar; los minijuegos no entregan materiales ni comida.
+Una partida nueva empieza con cero puntos y cero ingredientes, además de una ración de bienvenida. Los guardados anteriores conservan los recursos que ya tenían. Los ingredientes se consiguen al explorar o mediante compras con puntos; los minijuegos no entregan materiales ni comida.
 
-`coins` representa los puntos locales. Completar un minijuego con al menos un acierto recupera Ánimo y entrega entre uno y cinco puntos; una partida sin aciertos o cancelada no da puntos. `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
+`coins` representa los puntos locales. Completar uno de los seis minijuegos de 20 segundos con al menos un acierto recupera Ánimo y entrega entre uno y cinco puntos. El reto de cocos exige tres aciertos dentro de sus 60 segundos. Una partida cancelada, sin aciertos o sin completar las tres rondas de cocos no da puntos. `purchaseDecoration` comprueba saldo y propiedad antes de descontarlos y añadir una decoración. `decorations` contiene IDs conocidos y únicos. Las seis compras se dibujan en posiciones del mundo y no implican dinero real.
+
+## Cocina y mercado
+
+`src/experiences.ts` controla dos lugares a pantalla completa con estilos propios. La cocina presenta una despensa, tres espacios de ingredientes, un cuenco animado, comida preparada y un recetario. El mercado organiza sus estantes en Ingredientes y Decoración y utiliza los mismos puntos locales.
+
+El catálogo contiene doce ingredientes y doce recetas, además de Comida Rara (+8 Apetito). Las fórmulas comparan cantidades exactas de una a tres unidades sin importar su orden. Una combinación sin receta disponible para el nivel produce Comida Rara; un ingrediente aún bloqueado no se puede utilizar. Hay seis niveles de cocina, con 60 XP por nivel: una receta correcta entrega 12 XP y una mezcla rara 3 XP. El libro distingue páginas por nivel y recetas descubiertas.
+
+`cookIngredients` y `purchaseIngredient` verifican nivel, cantidad, existencias y saldo antes de mutar una copia. La interfaz no consume al seleccionar: cuatro gestos de mezcla y dos segundos de cocción preceden a una única liquidación contra el estado actual. Cerrar cancela los pasos pendientes sin consumir ni producir una ración. La despensa se bloquea durante la preparación y el resultado queda a la vista también en móvil. Las semillas son ingredientes comprables y mezclables; no hay un huerto.
 
 ## Exploraciones persistentes
 
 Una expedición conserva ID, bioma de salida, horas inicial y final, hasta tres adultos libres diferentes y sus materiales previstos. La recompensa y el grupo se fijan al salir. Viajar o recargar no cambia esos datos ni reinicia el reloj. Solo se reclama después de terminar y una sola vez.
 
-`explorationStarts` conserva los dos últimos inicios de expedición. `getExplorationAvailability` exige que la mascota principal sea adulta y permite un máximo de dos salidas por día calendario de `America/Mexico_City`, con ocho horas entre inicios. El contador se reinicia a medianoche de Ciudad de México; la espera de ocho horas conserva el último inicio y puede cruzar esa medianoche. Recargar, viajar o liberar una mascota no elimina el historial. Una expedición en marcha o pendiente de reclamar también impide iniciar otra.
+`explorationStarts` conserva los dos últimos inicios de expedición. `getExplorationAvailability` comprueba que exista un adulto principal o libre y permite un máximo de dos salidas por día calendario de `America/Mexico_City`, con ocho horas entre inicios. El contador se reinicia a medianoche de Ciudad de México; la espera de ocho horas conserva el último inicio y puede cruzar esa medianoche. Recargar, viajar o liberar una mascota no elimina el historial. Una expedición en marcha o pendiente de reclamar también impide iniciar otra.
 
-Un huevo, un bebé o un joven no pueden iniciar una expedición, aunque haya adultos libres disponibles. La madurez de la mascota principal se reconcilia con el reloj antes de validar la salida. Las expediciones legítimas de guardados anteriores se conservan y pueden reclamarse. Las expediciones y su economía pertenecen a la partida local y no son resultados validados por un servidor.
+Si la mascota principal es huevo, bebé o joven, la salida necesita al menos un adulto libre seleccionado. `principalParticipates` fija quién sale; `cookingLevel` y `lootVersion` fijan la tabla de materiales para mantener recompensas anteriores al recargar. La madurez de la mascota principal se reconcilia con el reloj antes de validar la salida. Las expediciones legítimas de guardados anteriores se conservan y pueden reclamarse. Las expediciones y su economía pertenecen a la partida local y no son resultados validados por un servidor.
 
 ## Guardados y migración
 
@@ -64,7 +74,9 @@ El historial `explorationStarts: number[]` es una ampliación aditiva de v3: val
 - v2: `100 - hunger` se convierte en Apetito. Se preservan las etapas alcanzadas y el progreso relativo dentro de ellas; un joven sigue siendo joven y un adulto sigue siendo adulto. Se mantienen adultos libres, inventario y expediciones legítimas.
 - v1: el antiguo campo `hunger` representaba saciedad y se conserva como Apetito. La mascota previa permanece adulta y mantiene identidad, recursos y logros.
 
-La validación comprueba estructuras, números finitos, límites, IDs únicos, coherencia entre etapa y edad, recetas, inventario, expediciones y decoraciones. Descarta propiedades desconocidas y rechaza estados inconsistentes.
+La ampliación de cocina también es aditiva: `cooking.xp` y `cooking.discovered` se conservan en v3. Las partidas con cinco ingredientes y tres recetas reciben contadores cero para los nuevos IDs. Si no hay historial de cocina, el recetario inicial reconoce el cuenco de bayas y las recetas que ya tenían raciones o registros en la dieta.
+
+La validación comprueba estructuras, números finitos, límites, IDs únicos, coherencia entre etapa y edad, recetas, inventario, expediciones, decoraciones y progreso de cocina. Descarta propiedades desconocidas y rechaza estados inconsistentes.
 
 `localStorage` puede estar bloqueado, llenarse o borrarse. La sesión debe seguir jugable si falla una escritura, sin sustituir cambios en memoria por una copia anterior del mismo guardado. La sincronización entre pestañas utiliza `storage` y reconciliación antes de operar; no equivale a transacciones ni a sincronización entre dispositivos. Otro origen web conserva otra partida.
 
@@ -76,17 +88,19 @@ La mascota ocupa menos pantalla. Su punto de apoyo se expresa en coordenadas nor
 
 Las mascotas libres siguen en la colección y en las expediciones, pero solo aparecen ocasionalmente en su bioma. Las ventanas deterministas son breves, de hasta 24 segundos en ciclos de 180 segundos; el renderer limita cuántas se muestran a la vez. Una colección local no representa otros usuarios conectados.
 
-El huevo no camina; bebés, jóvenes y adultos pueden seguir un destino. El botón HTML de la mascota permite el mismo cuidado por teclado que por toque. Las herramientas exponen nombre y selección, y los diálogos tienen título, cierre y Escape. La escena respeta movimiento reducido y pausa la animación al ocultar la página.
+La hoja superior izquierda abre el cambio de bioma. El botón central muestra el nombre de la mascota y sus cuatro barras de bienestar, sin repetir la hoja. La brújula no tiene texto visible y añade una señal roja de prohibición únicamente si no hay adultos propios. No se muestran el cartel «Otros rincones» ni el pie de marca y guardado.
 
-## Seis minijuegos
+El huevo no camina; bebés, jóvenes y adultos pueden seguir un destino. En móvil, las caricias requieren deslizar el dedo sobre la criatura. Ratón y teclado conservan sus alternativas, incluido el botón HTML de interacción. Las herramientas exponen nombre y selección, y los diálogos tienen título, cierre y Escape. La escena respeta movimiento reducido y pausa la animación al ocultar la página.
 
-Las sesiones duran 20 segundos. Luciérnagas en compañía exige que la mascota llegue a la luz; Lluvia de frutas usa la posición de la mascota para recoger; Salta los charcos comprueba el salto; Baile del bosque comprueba dirección y compás; Sendero de recuerdos comprueba una secuencia que la mascota recorre; Pelota al claro usa contacto y empuje hacia una meta.
+## Siete minijuegos
+
+Las seis sesiones originales duran 20 segundos. Cocos permite hasta 60 segundos para completar tres rondas con barajados cada vez más rápidos; el premio solo llega tras los tres aciertos. El ritmo emite notas sincronizadas y atenúa la lista de fondo sin reiniciarla. Luciérnagas en compañía exige que la mascota llegue a la luz; Lluvia de frutas usa la posición de la mascota para recoger; Salta los charcos comprueba el salto; Baile del bosque comprueba dirección y compás; Sendero de recuerdos comprueba una secuencia que la mascota recorre; Pelota al claro usa contacto y empuje hacia una meta.
 
 La interfaz recibe puntuaciones de acciones válidas y llama al dominio una sola vez al terminar. La recompensa recupera Ánimo, se limita a uno a cinco puntos y no añade ingredientes ni raciones. Salir antes o terminar sin aciertos no entrega puntos. Un huevo espera a nacer para jugar. Cada actividad mantiene controles táctiles y alternativas de teclado; no se valida una recompensa por un simple cambio de contador visual.
 
 ## Sonido
 
-La música utiliza un reproductor HTML de audio y cuatro MP3 de `public/audio/`. Las rutas respetan `import.meta.env.BASE_URL` para desarrollo y GitHub Pages. Una ronda barajada reproduce todas las pistas antes de mezclar de nuevo y evita la repetición inmediata entre rondas. El reproductor carga la pista actual según se necesita, sin decodificar la colección completa en memoria. Los efectos de interacción siguen sintetizados con Web Audio.
+La música utiliza un reproductor HTML de audio y cuatro MP3 de `public/audio/`. Las rutas respetan `import.meta.env.BASE_URL` para desarrollo y GitHub Pages. Una ronda barajada reproduce todas las pistas antes de mezclar de nuevo y evita la repetición inmediata entre rondas. El reproductor carga la pista actual según se necesita, sin decodificar la colección completa en memoria. Los efectos de interacción, los utensilios de cocina y las notas del juego de ritmo se sintetizan con Web Audio.
 
 El audio se inicia tras un gesto del usuario y admite reintentar si el navegador bloquea la reproducción. Música y efectos tienen activación y volumen independientes; las preferencias usan `xisverso.audio.v1`. Cambiar el volumen o viajar no reinicia la pista. Ocultar la página o desactivar música pausa la reproducción; al volver se conserva su posición. Destruir el motor libera el reproductor, los eventos y el contexto de efectos.
 

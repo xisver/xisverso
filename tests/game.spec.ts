@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   createGame,
+  MATERIALS,
   LIFECYCLE,
   type GameState,
   type MaterialId,
@@ -11,13 +12,25 @@ const SAVE_KEY = 'xisverso.save.v3';
 const V2_KEY = 'xisverso.save.v2';
 const LEGACY_KEY = 'xisverso.save.v1';
 const ADULT_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds + LIFECYCLE.youngSeconds;
-const MATERIAL_IDS: MaterialId[] = ['berries', 'grain', 'kelp', 'root', 'herb'];
+const MATERIAL_IDS: MaterialId[] = MATERIALS.map((item) => item.id);
 
 function bornState(stage: PetStage = 'adult', freeCount = 0): GameState {
   const state = createGame();
   // Care and kitchen fixtures bring their own supplies; new games are tested separately.
-  state.inventory.materials = { berries: 2, grain: 1, kelp: 0, root: 0, herb: 1 };
-  state.inventory.food = { 'fruit-bowl': 1, 'sea-soup': 0, 'root-stew': 0 };
+  state.inventory.materials = {
+    ...state.inventory.materials,
+    berries: 2,
+    grain: 1,
+    kelp: 0,
+    root: 0,
+    herb: 1,
+  };
+  state.inventory.food = {
+    ...state.inventory.food,
+    'fruit-bowl': 1,
+    'sea-soup': 0,
+    'root-stew': 0,
+  };
   state.pet.stage = stage;
   state.pet.growthSeconds = {
     egg: 0,
@@ -93,9 +106,21 @@ async function openKitchen(page: Page) {
     .click();
 }
 
+async function cookMixture(page: Page, ingredients: MaterialId[]) {
+  for (const id of ingredients) await page.locator(`[data-add-ingredient="${id}"]`).click();
+  await page.locator('#cook-mix').click();
+  await expect(page.locator('#kitchen-dialog')).toHaveAttribute('data-cooking-phase', 'mix');
+  for (let index = 0; index < 4; index++) await page.locator('#mix-step').click();
+  await expect(page.locator('#kitchen-dialog')).toHaveAttribute('data-cooking-phase', 'result');
+}
+async function openShop(page: Page, category: 'ingredients' | 'decoration' = 'ingredients') {
+  await page.getByRole('button', { name: 'Menú', exact: true }).click();
+  await page.getByRole('button', { name: 'Tienda', exact: true }).click();
+  await page.locator(`#shop-category-${category}`).click();
+}
 async function openActivity(page: Page, kind: string) {
   await page.getByRole('button', { name: 'Jugar', exact: true }).click();
-  await expect(page.locator('#games-dialog [data-minigame]')).toHaveCount(6);
+  await expect(page.locator('#games-dialog [data-minigame]')).toHaveCount(7);
   await page.locator(`[data-minigame="${kind}"]`).click();
   await expect(page.locator('#game-dialog')).toBeVisible();
   await expect(page.locator('#game-field canvas')).toHaveAttribute('aria-label', /Nubi participa/);
@@ -338,7 +363,7 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
     );
   await page.keyboard.press('Escape');
   await openKitchen(page);
-  await page.locator('[data-craft="fruit-bowl"]').click();
+  await cookMixture(page, ['berries', 'berries', 'grain']);
   const cooked = await readState(page);
   expect(cooked.inventory.food['fruit-bowl']).toBe(collected.inventory.food['fruit-bowl'] + 1);
   expect(cooked.inventory.materials.berries).toBe(collected.inventory.materials.berries - 2);
@@ -354,26 +379,31 @@ test('explora con tres compañeros, reclama una vez, cocina y alimenta con los m
 });
 
 for (const stage of ['egg', 'baby', 'young'] as const) {
-  test(`la mascota principal ${stage} no puede explorar aunque tenga adultos libres`, async ({
+  test(`un adulto libre explora mientras la mascota principal ${stage} se queda en casa`, async ({
     page,
   }) => {
     const initial = bornState(stage, 3);
     await seedState(page, initial);
     await gotoGame(page);
+    await expect(page.locator('#explore-button')).toHaveAttribute('data-locked', 'false');
     await page.getByRole('button', { name: 'Explorar', exact: true }).click();
     await expect(page.locator('#start-expedition')).toBeDisabled();
-    await expect(page.locator('#explore-dialog')).toContainText(/adult/i);
+    await page.locator('#expedition-party [data-companion="xis-free-1"]').check();
+    await expect(page.locator('#start-expedition')).toBeEnabled();
+    await page.locator('#start-expedition').click();
+    const started = await readState(page);
+    expect(started.expedition?.principalParticipates).toBe(false);
+    expect(started.expedition?.companionIds).toEqual(['xis-free-1']);
+    expect(started.expedition?.rewards.grain).toBe(1);
     await page.reload();
-    await page.getByRole('button', { name: 'Explorar', exact: true }).click();
-    await expect(page.locator('#start-expedition')).toBeDisabled();
     const saved = await readState(page);
     expect(saved.pet.stage).toBe(stage);
+    expect(saved.pet.id).toBe(initial.pet.id);
     expect(saved.freePets).toHaveLength(3);
-    expect(saved.expedition).toBeNull();
-    expect(saved.explorationStarts).toHaveLength(0);
+    expect(saved.expedition?.id).toBe(started.expedition?.id);
+    expect(saved.explorationStarts).toHaveLength(1);
   });
 }
-
 test('el adulto conserva la espera de ocho horas y el límite diario al recargar', async ({
   page,
 }) => {
@@ -417,13 +447,13 @@ test('el adulto conserva la espera de ocho horas y el límite diario al recargar
   await expect(page.locator('#exploration-remaining')).toContainText('2');
 });
 
-test('el huevo espera a nacer antes de jugar las seis aventuras', async ({ page }) => {
+test('el huevo espera a nacer antes de jugar las siete aventuras', async ({ page }) => {
   await gotoGame(page);
   const fresh = await readState(page);
   expect(fresh.coins).toBe(0);
-  expect(Object.values(fresh.inventory.materials)).toEqual([0, 0, 0, 0, 0]);
+  expect(Object.values(fresh.inventory.materials).every((amount) => amount === 0)).toBe(true);
   await page.getByRole('button', { name: 'Jugar', exact: true }).click();
-  await expect(page.locator('#minigame-list [data-minigame]')).toHaveCount(6);
+  await expect(page.locator('#minigame-list [data-minigame]')).toHaveCount(7);
   await expect(page.locator('#games-notice')).toContainText('nazca');
   for (const button of await page.locator('#minigame-list [data-minigame]').all())
     await expect(button).toBeDisabled();
@@ -469,7 +499,8 @@ test('jugar sube el ánimo y entrega puntos una sola vez que permiten comprar de
   await page.reload();
   expect((await readState(page)).coins).toBe(completed.coins);
   await page.getByRole('button', { name: 'Menú', exact: true }).click();
-  await page.getByRole('button', { name: 'Decoraciones', exact: true }).click();
+  await page.getByRole('button', { name: 'Tienda', exact: true }).click();
+  await page.getByRole('tab', { name: 'Decoración', exact: true }).click();
   await page.locator('[data-buy-decoration="flowers"]').click();
   const decorated = await readState(page);
   expect(decorated.decorations).toContain('flowers');
@@ -624,7 +655,7 @@ for (const height of [844, 667]) {
     expect((await readState(page)).inventory.food['fruit-bowl']).toBe(0);
     await page.mouse.move(5, 5);
     await openKitchen(page);
-    await expect(page.locator('[data-craft="fruit-bowl"]')).toBeVisible();
+    await expect(page.locator('[data-add-ingredient="berries"]')).toBeVisible();
     await page.keyboard.press('Escape');
     await visitBiome(page, 'coast');
     await expect(page.locator('#biome-name')).toHaveText('Costa Nácar');
@@ -652,7 +683,7 @@ test('un guardado dañado o el almacenamiento bloqueado no impiden incubar', asy
   });
   const blockedPage = await blocked.newPage();
   await gotoGame(blockedPage);
-  await expect(blockedPage.locator('.local-status')).toContainText('Sin guardar');
+  await expect(blockedPage.locator('#save-warning')).toContainText('Sin guardar');
   await blockedPage.locator('#open-pet').click();
   await blockedPage.locator('#rename-button').click();
   await blockedPage.getByLabel('Su nombre', { exact: true }).fill('Una sesión');
@@ -1053,10 +1084,8 @@ test('comprar decoración descuenta puntos una vez y conserva la compra al recar
   await seedState(page, initial);
   await gotoGame(page);
   await page.getByRole('button', { name: 'Menú', exact: true }).click();
-  await page
-    .locator('#menu-dialog')
-    .getByRole('button', { name: 'Decoraciones', exact: true })
-    .click();
+  await page.locator('#menu-dialog').getByRole('button', { name: 'Tienda', exact: true }).click();
+  await page.getByRole('tab', { name: 'Decoración', exact: true }).click();
   await page.locator('[data-buy-decoration="flowers"]').click();
   await expect(page.locator('#shop-points')).toHaveText('40');
   await expect(page.locator('[data-buy-decoration="flowers"]')).toBeDisabled();
@@ -1303,7 +1332,7 @@ test('si solo falla escribir, conserva la sesión y vuelve a guardar al recupera
   await page.locator('#rename-button').click();
   await page.getByLabel('Su nombre', { exact: true }).fill('Luna sin archivo');
   await page.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
-  await expect(page.locator('.local-status')).toContainText('Sin guardar');
+  await expect(page.locator('#save-warning')).toContainText('Sin guardar');
   await page.waitForTimeout(2200);
   await expect(page.locator('#pet-name')).toHaveText('Luna sin archivo');
   expect((await readState(page)).pet.name).toBe('Nubi');
@@ -1347,4 +1376,318 @@ test('migra v2 conservando al joven y convirtiendo hambre en apetito una sola ve
   expect(await page.evaluate((key) => localStorage.getItem(key), V2_KEY)).toBe(raw);
   await page.reload();
   expect((await readState(page)).pet.needs.appetite).toBeCloseTo(45, 1);
+});
+
+test('el HUD usa la hoja para viajar y una brújula bloqueada sin letreros ni pie', async ({
+  page,
+}) => {
+  await gotoGame(page);
+  await expect(
+    page.locator('.travel-sign, .world-footer, .location-pill, .pet-status-avatar'),
+  ).toHaveCount(0);
+  await expect(page.locator('.game-hud #open-pet')).toHaveCount(1);
+  await expect(page.locator('#hud-needs .hud-need')).toHaveCount(4);
+  await expect(page.locator('#explore-button')).toHaveAttribute('data-locked', 'true');
+  await expect(page.locator('#explore-button .exploration-lock')).toBeVisible();
+  await expect(page.locator('#explore-sign-label')).toHaveClass(/sr-only/);
+  await page.getByRole('button', { name: 'Explorar biomas', exact: true }).click();
+  await expect(page.locator('#travel-dialog')).toBeVisible();
+  await page.locator('[data-biome="coast"]').click();
+  expect((await readState(page)).currentBiome).toBe('coast');
+  await expect(page.locator('#biome-name')).toHaveText('Costa Nácar');
+});
+
+test('cocinar ocupa la pantalla y mezcla tres ingredientes para descubrir una receta una sola vez', async ({
+  page,
+}) => {
+  const initial = bornState('baby');
+  initial.inventory.materials.seeds = 2;
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openKitchen(page);
+  const kitchen = page.locator('#kitchen-dialog');
+  const bounds = await kitchen.boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(bounds!.x).toBe(0);
+  expect(bounds!.y).toBe(0);
+  expect(bounds!.width).toBe(viewport.width);
+  expect(bounds!.height).toBe(viewport.height);
+  await page.locator('[data-add-ingredient="seeds"]').click();
+  await page.locator('[data-add-ingredient="seeds"]').click();
+  await page.locator('[data-add-ingredient="grain"]').click();
+  await expect(page.locator('#ingredient-slots .filled')).toHaveCount(3);
+  await expect(page.locator('[data-add-ingredient="berries"]')).toBeDisabled();
+  expect((await readState(page)).inventory).toEqual(initial.inventory);
+  await page.locator('#cook-mix').click();
+  await expect(kitchen).toHaveAttribute('data-cooking-phase', 'mix');
+  for (let index = 0; index < 4; index++) await page.locator('#mix-step').click();
+  await expect(kitchen).toHaveAttribute('data-cooking-phase', 'cook');
+  expect((await readState(page)).inventory).toEqual(initial.inventory);
+  await expect(page.locator('#cooking-result')).toContainText('Crujientes de semillas');
+  const cooked = await readState(page);
+  expect(cooked.inventory.materials.seeds).toBe(0);
+  expect(cooked.inventory.materials.grain).toBe(0);
+  expect(cooked.inventory.food['seed-crackers']).toBe(1);
+  expect(cooked.cooking.xp).toBe(12);
+  expect(cooked.cooking.discovered).toContain('seed-crackers');
+  await page.locator('#open-recipe-book').click();
+  await expect(page.locator('[data-recipe-id="seed-crackers"]')).toContainText('2 Semillas');
+  await page.keyboard.press('Escape');
+  await page.reload();
+  expect((await readState(page)).inventory).toEqual(cooked.inventory);
+  expect((await readState(page)).cooking).toEqual(cooked.cooking);
+});
+
+test('salir de una mezcla sin terminar no consume ingredientes ni da experiencia', async ({
+  page,
+}) => {
+  const initial = bornState('baby');
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openKitchen(page);
+  await page.locator('[data-add-ingredient="berries"]').click();
+  await page.locator('#cook-mix').click();
+  await page.locator('#mix-step').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#kitchen-dialog')).not.toBeVisible();
+  await page.waitForTimeout(2200);
+  const after = await readState(page);
+  expect(after.inventory).toEqual(initial.inventory);
+  expect(after.cooking).toEqual(initial.cooking);
+  await openKitchen(page);
+  await expect(page.locator('#ingredient-slots .filled')).toHaveCount(0);
+});
+
+test('una combinación inesperada crea Comida Rara que recupera menos Apetito', async ({ page }) => {
+  const initial = bornState('baby');
+  initial.pet.needs.appetite = 20;
+  initial.inventory.materials.kelp = 1;
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openKitchen(page);
+  await cookMixture(page, ['berries', 'kelp']);
+  await expect(page.locator('#cooking-result')).toContainText('Comida Rara');
+  await expect(page.locator('#cooking-result')).toContainText('+8 Apetito');
+  const cooked = await readState(page);
+  expect(cooked.inventory.food['strange-food']).toBe(1);
+  expect(cooked.cooking.xp).toBe(3);
+  await page.locator('#cooking-result [data-experience-feed="strange-food"]').click();
+  await expect(page.locator('#kitchen-dialog')).not.toBeVisible();
+  expect((await readState(page)).selectedFood).toBe('strange-food');
+  await touchPet(page);
+  const fed = await readState(page);
+  expect(fed.inventory.food['strange-food']).toBe(0);
+  expect(fed.pet.diet['strange-food']).toBe(1);
+  expect(fed.pet.needs.appetite).toBeGreaterThan(cooked.pet.needs.appetite + 7.9);
+  expect(fed.pet.needs.appetite).toBeLessThanOrEqual(cooked.pet.needs.appetite + 8);
+});
+
+test('el nivel dos abre páginas del recetario e ingredientes que se compran con puntos', async ({
+  page,
+}) => {
+  const initial = bornState('baby');
+  initial.coins = 12;
+  initial.cooking.xp = 48;
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openShop(page);
+  await expect(page.locator('[data-buy-ingredient="carrot"]')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await openKitchen(page);
+  await page.locator('#open-recipe-book').click();
+  await expect(page.locator('[data-recipe-id="garden-salad"]')).toContainText(
+    'Se abre en el nivel 2',
+  );
+  await page.locator('#close-recipe-book').click();
+  await cookMixture(page, ['berries', 'berries', 'grain']);
+  await expect(page.locator('#cooking-level')).toHaveText('2');
+  await page.locator('#open-recipe-book').click();
+  await expect(page.locator('[data-recipe-id="garden-salad"]')).toContainText(
+    'Ensalada del huerto',
+  );
+  await expect(page.locator('[data-recipe-id="garden-salad"]')).toContainText('Aún por descubrir');
+  await page.keyboard.press('Escape');
+  await openShop(page);
+  await expect(page.locator('[data-buy-ingredient="carrot"]')).toBeEnabled();
+  await page.locator('[data-buy-ingredient="carrot"]').click();
+  const purchased = await readState(page);
+  expect(purchased.coins).toBe(8);
+  expect(purchased.inventory.materials.carrot).toBe(1);
+  expect(purchased.cooking.xp).toBe(60);
+  await expect(page.locator('[data-buy-ingredient="coconut"]')).toBeDisabled();
+  await page.reload();
+  expect((await readState(page)).inventory.materials.carrot).toBe(1);
+  expect((await readState(page)).cooking.xp).toBe(60);
+});
+
+test('la tienda móvil ocupa la pantalla y organiza ingredientes y decoración en estantes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  const initial = bornState('baby');
+  initial.coins = 50;
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openShop(page);
+  const bounds = await page.locator('#shop-dialog').boundingBox();
+  expect(bounds).toEqual({ x: 0, y: 0, width: 390, height: 667 });
+  await expect(page.locator('#ingredient-market')).toBeVisible();
+  await expect(page.locator('#ingredient-products .market-product')).toHaveCount(12);
+  await expect(page.locator('#decoration-market')).not.toBeVisible();
+  await page.locator('[data-buy-ingredient="seeds"]').click();
+  expect((await readState(page)).inventory.materials.seeds).toBe(1);
+  expect((await readState(page)).coins).toBe(49);
+  await page.getByRole('tab', { name: 'Decoración', exact: true }).click();
+  await expect(page.locator('#decoration-market')).toBeVisible();
+  await expect(page.locator('#ingredient-market')).not.toBeVisible();
+  await page.locator('[data-buy-decoration="flowers"]').click();
+  expect((await readState(page)).decorations).toContain('flowers');
+  expect((await readState(page)).coins).toBe(9);
+  expect(
+    await page
+      .locator('#shop-dialog')
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+});
+
+test('la exploración anima la recolección de un adulto libre y liquida los hallazgos una vez', async ({
+  page,
+}) => {
+  const initial = bornState('baby', 1);
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await page.locator('#explore-button').click();
+  await page.locator('[data-companion="xis-free-1"]').check();
+  await page.locator('#start-expedition').click();
+  const started = await readState(page);
+  await page.clock.fastForward(4000);
+  await expect(page.locator('#expedition-scene')).toHaveAttribute('data-phase', 'gather');
+  await expect(page.locator('#expedition-scene')).toHaveAttribute('data-participants', '1');
+  await expect(page.locator('#claim-expedition')).toBeDisabled();
+  await page.clock.fastForward(17000);
+  await expect(page.locator('#claim-expedition')).toBeEnabled();
+  await page.locator('#claim-expedition').click();
+  const claimed = await readState(page);
+  expect(claimed.inventory.materials.seeds).toBe(
+    initial.inventory.materials.seeds + started.expedition!.rewards.seeds,
+  );
+  expect(claimed.pet.id).toBe(initial.pet.id);
+  expect(claimed.pet.stage).toBe('baby');
+  expect(claimed.expedition).toBeNull();
+  await page.reload();
+  expect((await readState(page)).inventory.materials).toEqual(claimed.inventory.materials);
+});
+
+test('en un celular un toque no acaricia pero deslizar el dedo sobre la mascota sí', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 667 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  try {
+    const initial = bornState('baby');
+    initial.pet.needs.joy = 29;
+    await seedState(page, initial);
+    await gotoGame(page);
+    const center = await petCenter(page);
+    const touch = await context.newCDPSession(page);
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: center.x, y: center.y }],
+    });
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    expect((await readState(page)).pet.bond).toBe(initial.pet.bond);
+    expect((await readState(page)).pet.needs.joy).toBeLessThanOrEqual(initial.pet.needs.joy);
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: center.x - 12, y: center.y }],
+    });
+    for (const offset of [12, -12, 12])
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: center.x + offset, y: center.y }],
+      });
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(async () => (await readState(page)).pet.needs.joy).toBeGreaterThan(50);
+    expect((await readState(page)).pet.bond).toBe(initial.pet.bond + 2);
+  } finally {
+    await context.close();
+  }
+});
+
+test('los cocos exigen tres encuentros y cada ronda se mezcla más rápido sin duplicar premios', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Math.random = () => 0;
+  });
+  const initial = bornState('baby');
+  await page.clock.install({ time: new Date(initial.lastUpdated) });
+  await seedState(page, initial);
+  await gotoGame(page);
+  await openActivity(page, 'coconut');
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 100)));
+  const field = page.locator('#game-field');
+  await expect(page.getByRole('button', { name: 'Coco 1', exact: true })).toBeDisabled();
+  const speeds: number[] = [];
+  for (const [index, elapsed] of [4400, 5600, 5100].entries()) {
+    await page.clock.runFor(elapsed);
+    await expect(field).toHaveAttribute('data-coconut-phase', 'choose');
+    await expect(field).toHaveAttribute('data-coconut-round', String(index + 1));
+    speeds.push(Number(await field.getAttribute('data-coconut-speed')));
+    expect((await readState(page)).coins).toBe(initial.coins);
+    await page.getByRole('button', { name: 'Coco 1', exact: true }).click();
+    await expect(page.locator('#game-score')).toHaveText(String(index + 1));
+  }
+  expect(speeds[1]).toBeLessThan(speeds[0]);
+  expect(speeds[2]).toBeLessThan(speeds[1]);
+  await expect(page.locator('#game-result')).toBeVisible();
+  const completed = await readState(page);
+  expect(completed.coins).toBe(initial.coins + 1);
+  expect(completed.inventory).toEqual(initial.inventory);
+  await page.clock.fastForward(1000);
+  expect((await readState(page)).coins).toBe(completed.coins);
+});
+
+test('el ritmo produce notas y al salir conserva la canción y no concede un premio anticipado', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const original = AudioContext.prototype.createOscillator;
+    (window as any).playedNotes = 0;
+    AudioContext.prototype.createOscillator = function () {
+      (window as any).playedNotes++;
+      return original.call(this);
+    };
+  });
+  await seedState(page, bornState('baby'));
+  await gotoGame(page);
+  await page.getByRole('button', { name: 'Caricias', exact: true }).click();
+  const music = page.locator('#background-music');
+  await expect
+    .poll(() =>
+      music.evaluate(
+        (element) =>
+          !(element as HTMLAudioElement).paused && (element as HTMLAudioElement).currentTime > 0,
+      ),
+    )
+    .toBe(true);
+  const song = await music.evaluate((element) => (element as HTMLAudioElement).currentSrc);
+  const previousNotes = await page.evaluate(() => (window as any).playedNotes);
+  await openActivity(page, 'rhythm');
+  await expect
+    .poll(() => page.evaluate(() => (window as any).playedNotes))
+    .toBeGreaterThan(previousNotes);
+  await expect(page.locator('#game-field')).toHaveAttribute('data-rhythm-beat', /\d+/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#game-dialog')).not.toBeVisible();
+  await expect
+    .poll(() => music.evaluate((element) => !(element as HTMLAudioElement).paused))
+    .toBe(true);
+  expect(await music.evaluate((element) => (element as HTMLAudioElement).currentSrc)).toBe(song);
+  expect((await readState(page)).coins).toBe(0);
 });

@@ -1,7 +1,18 @@
 import type { BiomeId } from './domain/game';
 
 type Sound =
-  'pet' | 'feed' | 'clean' | 'rest' | 'success' | 'tap' | 'travel' | 'collect' | 'purchase';
+  | 'pet'
+  | 'feed'
+  | 'clean'
+  | 'rest'
+  | 'success'
+  | 'tap'
+  | 'travel'
+  | 'collect'
+  | 'purchase'
+  | 'utensil'
+  | 'mix'
+  | 'cook';
 export interface AudioSettings {
   music: boolean;
   effects: boolean;
@@ -50,6 +61,8 @@ export function createAudio() {
   let musicBus: GainNode | undefined;
   let musicSource: MediaElementAudioSourceNode | undefined;
   let effectsBus: GainNode | undefined;
+  let rhythmBus: GainNode | undefined;
+  let rhythmMode = false;
   let unlocked = false;
   let disposed = false;
   let queue: Track[] = [];
@@ -61,7 +74,7 @@ export function createAudio() {
   let retryAfterPending = false;
   let pending: { generation: number; promise: Promise<void> } | undefined;
   const failed = new Set<Track>();
-  const voices = new Set<OscillatorNode>();
+  const voices = new Set<AudioScheduledSourceNode>();
 
   function canPlayMusic() {
     return unlocked && !disposed && settings.music && !document.hidden;
@@ -178,10 +191,53 @@ export function createAudio() {
       envelope.disconnect();
     };
   }
+  function percussion(sound: 'utensil' | 'mix' | 'cook') {
+    if (!context || !effectsBus) return;
+    if (sound === 'utensil') {
+      tone(95, 0.09, 0.18, effectsBus, 0, 'triangle');
+      tone(108, 0.14, 0.08, effectsBus, 0.018, 'sine');
+      return;
+    }
+    for (let index = 0; index < (sound === 'mix' ? 3 : 5); index++) {
+      const source = context.createBufferSource();
+      const length = Math.floor(context.sampleRate * 0.13);
+      const buffer = context.createBuffer(1, length, context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+      source.buffer = buffer;
+      const filter = context.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = sound === 'mix' ? 950 + index * 150 : 480;
+      filter.Q.value = 0.7;
+      const envelope = context.createGain();
+      const at = context.currentTime + index * 0.11;
+      envelope.gain.setValueAtTime(0, at);
+      envelope.gain.linearRampToValueAtTime(0.42, at + 0.016);
+      envelope.gain.exponentialRampToValueAtTime(0.001, at + 0.13);
+      source.connect(filter).connect(envelope).connect(effectsBus);
+      source.start(at);
+      source.stop(at + 0.14);
+      voices.add(source);
+      source.onended = () => {
+        voices.delete(source);
+        source.disconnect();
+        filter.disconnect();
+        envelope.disconnect();
+      };
+    }
+    if (sound === 'cook')
+      [64, 69, 76].forEach((note, index) => tone(note, 0.3, 0.12, effectsBus!, index * 0.12));
+  }
   function mix() {
+    if (context && rhythmBus)
+      rhythmBus.gain.setTargetAtTime(
+        settings.music ? settings.musicVolume * 0.8 : 0,
+        context.currentTime,
+        0.04,
+      );
     if (context && musicBus)
       musicBus.gain.setTargetAtTime(
-        settings.music ? settings.musicVolume : 0,
+        settings.music ? settings.musicVolume * (rhythmMode ? 0.18 : 1) : 0,
         context.currentTime,
         0.08,
       );
@@ -201,6 +257,9 @@ export function createAudio() {
         effectsBus = context.createGain();
         effectsBus.gain.value = settings.effects ? settings.effectsVolume * 0.35 : 0;
         effectsBus.connect(context.destination);
+        rhythmBus = context.createGain();
+        rhythmBus.gain.value = settings.music ? settings.musicVolume * 0.8 : 0;
+        rhythmBus.connect(context.destination);
         musicBus = context.createGain();
         musicBus.gain.value = settings.music ? settings.musicVolume : 0;
         musicSource = context.createMediaElementSource(music);
@@ -259,9 +318,25 @@ export function createAudio() {
     setBiome(_next: BiomeId) {
       // The playlist belongs to the whole game; travelling preserves the current song.
     },
+    setRhythmMode(active: boolean) {
+      rhythmMode = active;
+      mix();
+    },
+    playRhythm(note: number, hit = false) {
+      if (!context || document.hidden || disposed || !rhythmMode || !Number.isFinite(note)) return;
+      if (settings.music && rhythmBus) {
+        tone(note, 0.24, 0.3, rhythmBus, 0, 'triangle');
+        if (hit) tone(note + 12, 0.18, 0.15, rhythmBus, 0.04);
+      }
+      if (settings.effects && effectsBus && hit) tone(92, 0.07, 0.1, effectsBus);
+    },
     play(sound: Sound) {
       if (!context || !effectsBus || !settings.effects || document.hidden || disposed) return;
-      const patterns: Record<Sound, number[]> = {
+      if (sound === 'utensil' || sound === 'mix' || sound === 'cook') {
+        percussion(sound);
+        return;
+      }
+      const patterns = {
         pet: [76, 79],
         feed: [60, 64, 67],
         clean: [84, 88, 91],
@@ -291,6 +366,7 @@ export function createAudio() {
       musicSource?.disconnect();
       musicBus?.disconnect();
       effectsBus?.disconnect();
+      rhythmBus?.disconnect();
       for (const voice of voices) {
         try {
           voice.stop();

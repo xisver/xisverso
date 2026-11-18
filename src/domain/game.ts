@@ -3,8 +3,33 @@ export type BiomeId = 'forest' | 'coast' | 'tundra';
 export type Need = 'appetite' | 'energy' | 'hygiene' | 'joy';
 export type Action = 'feed' | 'clean' | 'rest' | 'pet';
 export type PetStage = 'egg' | 'baby' | 'young' | 'adult';
-export type MaterialId = 'berries' | 'grain' | 'kelp' | 'root' | 'herb';
-export type RecipeId = 'fruit-bowl' | 'sea-soup' | 'root-stew';
+export type MaterialId =
+  | 'berries'
+  | 'grain'
+  | 'kelp'
+  | 'root'
+  | 'herb'
+  | 'seeds'
+  | 'carrot'
+  | 'mushroom'
+  | 'coconut'
+  | 'honey'
+  | 'milk'
+  | 'cocoa';
+export type RecipeId =
+  | 'fruit-bowl'
+  | 'sea-soup'
+  | 'root-stew'
+  | 'seed-crackers'
+  | 'garden-salad'
+  | 'mushroom-rice'
+  | 'berry-jam'
+  | 'coconut-bowl'
+  | 'root-cream'
+  | 'honey-pudding'
+  | 'cocoa-cookie'
+  | 'aurora-feast'
+  | 'strange-food';
 export type StarterEggId = 'speckled' | 'striped' | 'starry';
 export type DecorationId = 'lantern' | 'flowers' | 'fountain' | 'bench' | 'mushrooms' | 'arch';
 
@@ -39,6 +64,9 @@ export interface Expedition {
   startedAt: number;
   endsAt: number;
   rewards: Record<MaterialId, number>;
+  principalParticipates: boolean;
+  cookingLevel: number;
+  lootVersion: 1 | 2;
 }
 export interface GameState {
   version: 3;
@@ -57,6 +85,7 @@ export interface GameState {
   activities: number;
   miniGameBest: number;
   decorations: DecorationId[];
+  cooking: { xp: number; discovered: RecipeId[] };
 }
 export type State = GameState;
 export interface CareResult {
@@ -76,6 +105,9 @@ export interface MaterialDefinition {
   id: MaterialId;
   name: string;
   description: string;
+  price: number;
+  unlockLevel: number;
+  symbol: string;
 }
 export interface RecipeDefinition {
   id: RecipeId;
@@ -84,6 +116,7 @@ export interface RecipeDefinition {
   ingredients: Partial<Record<MaterialId, number>>;
   hungerRelief: number;
   growthBonus: number;
+  unlockLevel: number;
 }
 export interface DecorationDefinition {
   id: DecorationId;
@@ -177,11 +210,102 @@ export const BIOMES: readonly BiomeDefinition[] = [
   },
 ];
 export const MATERIALS: readonly MaterialDefinition[] = [
-  { id: 'berries', name: 'Bayas', description: 'Frutos dulces del bosque.' },
-  { id: 'grain', name: 'Granos', description: 'Una base nutritiva para cocinar.' },
-  { id: 'kelp', name: 'Algas', description: 'Ingredientes frescos de la costa.' },
-  { id: 'root', name: 'Raíces', description: 'Alimento que resiste el frío.' },
-  { id: 'herb', name: 'Hierbas', description: 'Un toque especial para las comidas.' },
+  {
+    id: 'berries',
+    name: 'Bayas',
+    description: 'Frutos dulces del bosque.',
+    price: 2,
+    unlockLevel: 1,
+    symbol: '🫐',
+  },
+  {
+    id: 'grain',
+    name: 'Granos',
+    description: 'Una base nutritiva para cocinar.',
+    price: 1,
+    unlockLevel: 1,
+    symbol: '🌾',
+  },
+  {
+    id: 'kelp',
+    name: 'Algas',
+    description: 'Ingredientes frescos de la costa.',
+    price: 2,
+    unlockLevel: 1,
+    symbol: '🌿',
+  },
+  {
+    id: 'root',
+    name: 'Raíces',
+    description: 'Alimento que resiste el frío.',
+    price: 2,
+    unlockLevel: 1,
+    symbol: '🍠',
+  },
+  {
+    id: 'herb',
+    name: 'Hierbas',
+    description: 'Un toque especial para las comidas.',
+    price: 1,
+    unlockLevel: 1,
+    symbol: '🍃',
+  },
+  {
+    id: 'seeds',
+    name: 'Semillas',
+    description: 'Pequeñas semillas crujientes para mezclar.',
+    price: 1,
+    unlockLevel: 1,
+    symbol: '🌰',
+  },
+  {
+    id: 'carrot',
+    name: 'Zanahorias',
+    description: 'Crujientes y llenas de color.',
+    price: 4,
+    unlockLevel: 2,
+    symbol: '🥕',
+  },
+  {
+    id: 'mushroom',
+    name: 'Setas',
+    description: 'Un sabor suave para platos calientes.',
+    price: 4,
+    unlockLevel: 2,
+    symbol: '🍄',
+  },
+  {
+    id: 'coconut',
+    name: 'Coco',
+    description: 'Pulpa fresca de la costa.',
+    price: 7,
+    unlockLevel: 3,
+    symbol: '🥥',
+  },
+  {
+    id: 'honey',
+    name: 'Miel',
+    description: 'Dulzura dorada para recetas especiales.',
+    price: 8,
+    unlockLevel: 3,
+    symbol: '🍯',
+  },
+  {
+    id: 'milk',
+    name: 'Leche',
+    description: 'Una base cremosa para cocineros expertos.',
+    price: 11,
+    unlockLevel: 4,
+    symbol: '🥛',
+  },
+  {
+    id: 'cocoa',
+    name: 'Cacao',
+    description: 'Un ingrediente aromático de gran valor.',
+    price: 16,
+    unlockLevel: 5,
+    symbol: '🍫',
+  },
 ];
 export const RECIPES: readonly RecipeDefinition[] = [
   {
@@ -191,6 +315,7 @@ export const RECIPES: readonly RecipeDefinition[] = [
     ingredients: { berries: 2, grain: 1 },
     hungerRelief: 32,
     growthBonus: 0,
+    unlockLevel: 1,
   },
   {
     id: 'sea-soup',
@@ -199,6 +324,7 @@ export const RECIPES: readonly RecipeDefinition[] = [
     ingredients: { kelp: 2, herb: 1 },
     hungerRelief: 44,
     growthBonus: 0,
+    unlockLevel: 1,
   },
   {
     id: 'root-stew',
@@ -207,8 +333,101 @@ export const RECIPES: readonly RecipeDefinition[] = [
     ingredients: { root: 2, grain: 1 },
     hungerRelief: 50,
     growthBonus: 0,
+    unlockLevel: 1,
+  },
+  {
+    id: 'seed-crackers',
+    name: 'Crujientes de semillas',
+    description: 'Un bocado pequeño y crujiente.',
+    ingredients: { seeds: 2, grain: 1 },
+    hungerRelief: 24,
+    growthBonus: 0,
+    unlockLevel: 1,
+  },
+  {
+    id: 'garden-salad',
+    name: 'Ensalada del huerto',
+    description: 'Colores frescos con semillas.',
+    ingredients: { carrot: 1, herb: 1, seeds: 1 },
+    hungerRelief: 46,
+    growthBonus: 0,
+    unlockLevel: 2,
+  },
+  {
+    id: 'mushroom-rice',
+    name: 'Arroz de setas',
+    description: 'Granos tiernos con aroma del bosque.',
+    ingredients: { mushroom: 1, grain: 1, herb: 1 },
+    hungerRelief: 52,
+    growthBonus: 0,
+    unlockLevel: 2,
+  },
+  {
+    id: 'berry-jam',
+    name: 'Compota dorada',
+    description: 'Bayas dulces con un toque de miel.',
+    ingredients: { berries: 2, honey: 1 },
+    hungerRelief: 56,
+    growthBonus: 0,
+    unlockLevel: 3,
+  },
+  {
+    id: 'coconut-bowl',
+    name: 'Cuenco tropical',
+    description: 'Coco, bayas y semillas junto al mar.',
+    ingredients: { coconut: 1, berries: 1, seeds: 1 },
+    hungerRelief: 60,
+    growthBonus: 0,
+    unlockLevel: 3,
+  },
+  {
+    id: 'root-cream',
+    name: 'Crema de la tundra',
+    description: 'Raíces suaves con hierbas y leche.',
+    ingredients: { root: 1, milk: 1, herb: 1 },
+    hungerRelief: 66,
+    growthBonus: 0,
+    unlockLevel: 4,
+  },
+  {
+    id: 'honey-pudding',
+    name: 'Pudín de miel',
+    description: 'Un postre cremoso y reconfortante.',
+    ingredients: { milk: 1, grain: 1, honey: 1 },
+    hungerRelief: 70,
+    growthBonus: 0,
+    unlockLevel: 4,
+  },
+  {
+    id: 'cocoa-cookie',
+    name: 'Galleta de cacao',
+    description: 'Una especialidad para tardes tranquilas.',
+    ingredients: { cocoa: 1, grain: 1, honey: 1 },
+    hungerRelief: 78,
+    growthBonus: 0,
+    unlockLevel: 5,
+  },
+  {
+    id: 'aurora-feast',
+    name: 'Delicia de aurora',
+    description: 'Cacao, coco y crema en armonía.',
+    ingredients: { cocoa: 1, milk: 1, coconut: 1 },
+    hungerRelief: 90,
+    growthBonus: 0,
+    unlockLevel: 6,
+  },
+  {
+    id: 'strange-food',
+    name: 'Comida Rara',
+    description: 'Una mezcla inesperada. Alimenta un poquito.',
+    ingredients: {},
+    hungerRelief: 8,
+    growthBonus: 0,
+    unlockLevel: 1,
   },
 ];
+export const COOKING_XP_PER_LEVEL = 60;
+export const MAX_COOKING_LEVEL = 6;
 export const LIFECYCLE = {
   eggSeconds: 5 * 3600,
   babySeconds: 20 * 3600,
@@ -235,8 +454,10 @@ const YOUNG_SECONDS = LIFECYCLE.eggSeconds + LIFECYCLE.babySeconds;
 const ADULT_SECONDS = YOUNG_SECONDS + LIFECYCLE.youngSeconds;
 const needIds: readonly Need[] = ['appetite', 'energy', 'hygiene', 'joy'];
 const biomeIds: readonly BiomeId[] = ['forest', 'coast', 'tundra'];
-const materialIds: readonly MaterialId[] = ['berries', 'grain', 'kelp', 'root', 'herb'];
-const recipeIds: readonly RecipeId[] = ['fruit-bowl', 'sea-soup', 'root-stew'];
+const legacyMaterialIds: readonly MaterialId[] = ['berries', 'grain', 'kelp', 'root', 'herb'];
+const materialIds = MATERIALS.map((item) => item.id);
+const legacyRecipeIds: readonly RecipeId[] = ['fruit-bowl', 'sea-soup', 'root-stew'];
+const recipeIds = RECIPES.map((item) => item.id);
 const decorationIds = DECORATIONS.map((item) => item.id);
 const decayRates: Record<BiomeId, Record<Need, number>> = {
   forest: { appetite: 1, energy: 0.8, hygiene: 0.6, joy: 0.7 },
@@ -258,18 +479,10 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const normalizeNow = (now: number, fallback = 0) =>
   validNumber(now, 0, Number.MAX_SAFE_INTEGER) ? Math.floor(now) : fallback;
-const emptyMaterials = (): Record<MaterialId, number> => ({
-  berries: 0,
-  grain: 0,
-  kelp: 0,
-  root: 0,
-  herb: 0,
-});
-const emptyFood = (): Record<RecipeId, number> => ({
-  'fruit-bowl': 0,
-  'sea-soup': 0,
-  'root-stew': 0,
-});
+const emptyMaterials = (): Record<MaterialId, number> =>
+  Object.fromEntries(materialIds.map((id) => [id, 0])) as Record<MaterialId, number>;
+const emptyFood = (): Record<RecipeId, number> =>
+  Object.fromEntries(recipeIds.map((id) => [id, 0])) as Record<RecipeId, number>;
 const copyPet = <T extends Pet>(pet: T): T => ({
   ...pet,
   needs: { ...pet.needs },
@@ -281,8 +494,12 @@ function clone(state: GameState): GameState {
     pet: copyPet(state.pet),
     freePets: state.freePets.map(copyPet),
     decorations: [...state.decorations],
+    cooking: { xp: state.cooking.xp, discovered: [...state.cooking.discovered] },
     explorationStarts: [...state.explorationStarts],
-    inventory: { materials: { ...state.inventory.materials }, food: { ...state.inventory.food } },
+    inventory: {
+      materials: { ...emptyMaterials(), ...state.inventory.materials },
+      food: { ...emptyFood(), ...state.inventory.food },
+    },
     expedition: state.expedition
       ? {
           ...state.expedition,
@@ -328,7 +545,7 @@ export function createGame(now = Date.now()): GameState {
     freePets: [],
     inventory: {
       materials: emptyMaterials(),
-      food: { 'fruit-bowl': 1, 'sea-soup': 0, 'root-stew': 0 },
+      food: { ...emptyFood(), 'fruit-bowl': 1 },
     },
     selectedFood: 'fruit-bowl',
     expedition: null,
@@ -340,6 +557,7 @@ export function createGame(now = Date.now()): GameState {
     activities: 0,
     miniGameBest: 0,
     decorations: [],
+    cooking: { xp: 0, discovered: ['fruit-bowl'] },
   };
 }
 /** Resolve the immutable shell style from a valid persisted UInt32 seed. */
@@ -531,32 +749,140 @@ export function releaseAdult(state: GameState, now = Date.now()): CareResult {
     message: `${name} vive libre en ${BIOMES.find((biome) => biome.id === next.currentBiome)!.name}. Un nuevo huevo empieza su historia.`,
   };
 }
-export function craftFood(state: GameState, recipeId: RecipeId, now = Date.now()): CareResult {
+export function getCookingProgress(state: GameState): {
+  level: number;
+  xp: number;
+  current: number;
+  needed: number;
+  progress: number;
+} {
+  const xp = state.cooking.xp;
+  const level = Math.min(MAX_COOKING_LEVEL, 1 + Math.floor(xp / COOKING_XP_PER_LEVEL));
+  const current = level === MAX_COOKING_LEVEL ? COOKING_XP_PER_LEVEL : xp % COOKING_XP_PER_LEVEL;
+  return {
+    level,
+    xp,
+    current,
+    needed: COOKING_XP_PER_LEVEL,
+    progress: (current / COOKING_XP_PER_LEVEL) * 100,
+  };
+}
+export interface CookingResult extends CareResult {
+  recipeId?: RecipeId;
+  discovered?: boolean;
+  xpGained?: number;
+}
+export function cookIngredients(
+  state: GameState,
+  ingredients: readonly MaterialId[],
+  now = Date.now(),
+): CookingResult {
   const next = advanceTime(state, now);
-  const recipe = RECIPES.find((item) => item.id === recipeId);
-  if (!recipe) return { state: next, success: false, message: 'Esa receta no está disponible.' };
-  for (const [material, amount] of Object.entries(recipe.ingredients))
-    if (next.inventory.materials[material as MaterialId] < amount!)
-      return {
-        state: next,
-        success: false,
-        message: 'Faltan ingredientes. Explora un bioma para recoger más.',
-      };
+  if (
+    !Array.isArray(ingredients) ||
+    ingredients.length < 1 ||
+    ingredients.length > 3 ||
+    ingredients.some((id) => !materialIds.includes(id))
+  )
+    return { state: next, success: false, message: 'Elige entre uno y tres ingredientes válidos.' };
+  const amounts = emptyMaterials();
+  for (const id of ingredients as readonly MaterialId[]) amounts[id]++;
+  const level = getCookingProgress(next).level;
+  if (ingredients.some((id) => MATERIALS.find((item) => item.id === id)!.unlockLevel > level))
+    return {
+      state: next,
+      success: false,
+      message: 'Ese ingrediente se desbloquea al mejorar tu nivel de cocina.',
+    };
+  if (materialIds.some((id) => amounts[id] > (next.inventory.materials[id] ?? 0)))
+    return {
+      state: next,
+      success: false,
+      message: 'Faltan ingredientes. Explora o visita la tienda.',
+    };
+  const matched = RECIPES.find(
+    (recipe) =>
+      recipe.id !== 'strange-food' &&
+      materialIds.every((id) => (recipe.ingredients[id] ?? 0) === amounts[id]),
+  );
+  const recipe =
+    matched && matched.unlockLevel <= level
+      ? matched
+      : RECIPES.find((item) => item.id === 'strange-food')!;
   if (next.inventory.food[recipe.id] >= MAX_COUNTER)
     return {
       state: next,
       success: false,
       message: 'Ya tienes suficiente comida preparada de esta receta.',
     };
-  for (const [material, amount] of Object.entries(recipe.ingredients))
-    next.inventory.materials[material as MaterialId] -= amount!;
+  for (const id of ingredients as readonly MaterialId[]) next.inventory.materials[id]--;
   next.inventory.food[recipe.id]++;
   next.selectedFood = recipe.id;
+  const discovered = !next.cooking.discovered.includes(recipe.id);
+  if (discovered) next.cooking.discovered.push(recipe.id);
+  const xpGained = recipe.id === 'strange-food' ? 3 : 12;
+  next.cooking.xp = Math.min(MAX_COUNTER, next.cooking.xp + xpGained);
   next.activities = Math.min(MAX_COUNTER, next.activities + 1);
   return {
     state: next,
     success: true,
-    message: `¡${recipe.name} preparado! Ya puedes dárselo a tu compañero.`,
+    recipeId: recipe.id,
+    discovered,
+    xpGained,
+    message:
+      recipe.id === 'strange-food'
+        ? '¡Comida Rara! La mezcla recupera un poquito de Apetito. Prueba otra combinación.'
+        : `¡${recipe.name} preparado! +${xpGained} experiencia de cocina.`,
+  };
+}
+export function craftFood(state: GameState, recipeId: RecipeId, now = Date.now()): CareResult {
+  const recipe = RECIPES.find((item) => item.id === recipeId && item.id !== 'strange-food');
+  if (!recipe || recipe.unlockLevel > getCookingProgress(state).level)
+    return {
+      state: advanceTime(state, now),
+      success: false,
+      message: 'Esa receta todavía no está disponible.',
+    };
+  const ingredients = Object.entries(recipe.ingredients).flatMap(([id, count]) =>
+    Array.from({ length: count! }, () => id as MaterialId),
+  );
+  return cookIngredients(state, ingredients, now);
+}
+export function purchaseIngredient(
+  state: GameState,
+  materialId: MaterialId,
+  quantity = 1,
+  now = Date.now(),
+): CareResult {
+  const next = advanceTime(state, now);
+  const material = MATERIALS.find((item) => item.id === materialId);
+  if (!material || !validInteger(quantity, 1, 99))
+    return { state: next, success: false, message: 'Elige un ingrediente y una cantidad válida.' };
+  if (material.unlockLevel > getCookingProgress(next).level)
+    return {
+      state: next,
+      success: false,
+      message: `Este ingrediente requiere nivel ${material.unlockLevel} de cocina.`,
+    };
+  const cost = material.price * quantity;
+  if (next.coins < cost)
+    return {
+      state: next,
+      success: false,
+      message: 'Necesitas más puntos. Juega con tu mascota para conseguirlos.',
+    };
+  if (next.inventory.materials[material.id] + quantity > MAX_COUNTER)
+    return {
+      state: next,
+      success: false,
+      message: 'No cabe más de ese ingrediente en tu mochila.',
+    };
+  next.coins -= cost;
+  next.inventory.materials[material.id] += quantity;
+  return {
+    state: next,
+    success: true,
+    message: `¡${quantity} de ${material.name.toLowerCase()} para tu cocina!`,
   };
 }
 export function selectFood(state: GameState, recipeId: RecipeId): GameState {
@@ -590,13 +916,23 @@ function expeditionRewards(
   biome: BiomeId,
   companions: number,
   seed: number,
+  principalParticipates = true,
+  cookingLevel = 1,
+  lootVersion: 1 | 2 = 2,
 ): Record<MaterialId, number> {
   const result = emptyMaterials();
-  const factor = companions + 1;
+  const factor = companions + (principalParticipates ? 1 : 0);
   const primary: MaterialId = biome === 'forest' ? 'berries' : biome === 'coast' ? 'kelp' : 'root';
   result[primary] = (2 + (seed % 2)) * factor;
   result.grain = factor;
   result.herb = factor;
+  if (lootVersion === 2) {
+    result.seeds = factor;
+    if (cookingLevel >= 2) result[biome === 'tundra' ? 'mushroom' : 'carrot'] = factor;
+    if (cookingLevel >= 3) result[biome === 'coast' ? 'coconut' : 'honey'] = factor;
+    if (cookingLevel >= 4) result.milk = factor;
+    if (cookingLevel >= 5) result.cocoa = factor;
+  }
   return result;
 }
 function explorationDay(timestamp: number): string {
@@ -650,7 +986,7 @@ export function getExplorationAvailability(
   );
   const reason = state.expedition
     ? 'pending'
-    : stageFor(effectiveAge) !== 'adult'
+    : stageFor(effectiveAge) !== 'adult' && !state.freePets.some((pet) => pet.stage === 'adult')
       ? 'stage'
       : remaining === 0
         ? 'daily-limit'
@@ -676,11 +1012,11 @@ export function startExpedition(
       success: false,
       message: 'Ya hay una exploración en marcha o pendiente de recoger.',
     };
-  if (next.pet.stage !== 'adult')
+  if (next.pet.stage !== 'adult' && next.freePets.length === 0)
     return {
       state: next,
       success: false,
-      message: 'Tu mascota principal debe ser adulta para salir de exploración.',
+      message: 'Necesitas una mascota adulta para salir de exploración.',
     };
   if (
     !Array.isArray(companionIds) ||
@@ -692,6 +1028,12 @@ export function startExpedition(
       state: next,
       success: false,
       message: 'Elige hasta tres compañeros libres diferentes.',
+    };
+  if (next.pet.stage !== 'adult' && companionIds.length === 0)
+    return {
+      state: next,
+      success: false,
+      message: 'Elige al menos una mascota adulta libre para explorar.',
     };
   const availability = getExplorationAvailability(next, next.lastUpdated);
   if (!availability.canStart)
@@ -715,7 +1057,17 @@ export function startExpedition(
     companionIds: [...companionIds],
     startedAt: next.lastUpdated,
     endsAt: next.lastUpdated + EXPEDITION_SECONDS * 1000,
-    rewards: expeditionRewards(next.currentBiome, companionIds.length, next.pet.seed),
+    rewards: expeditionRewards(
+      next.currentBiome,
+      companionIds.length,
+      next.pet.seed,
+      next.pet.stage === 'adult',
+      getCookingProgress(next).level,
+      2,
+    ),
+    principalParticipates: next.pet.stage === 'adult',
+    cookingLevel: getCookingProgress(next).level,
+    lootVersion: 2,
   };
   next.explorationStarts = [...next.explorationStarts, next.lastUpdated].slice(
     -EXPEDITIONS_PER_DAY,
@@ -864,9 +1216,15 @@ function counters<T extends string>(
   value: unknown,
   ids: readonly T[],
   maximum = MAX_COUNTER,
+  required: readonly T[] = ids,
 ): Record<T, number> | null {
-  if (!record(value) || !ids.every((id) => validInteger(value[id], 0, maximum))) return null;
-  return Object.fromEntries(ids.map((id) => [id, value[id]])) as Record<T, number>;
+  if (
+    !record(value) ||
+    !required.every((id) => validInteger(value[id], 0, maximum)) ||
+    !ids.every((id) => value[id] === undefined || validInteger(value[id], 0, maximum))
+  )
+    return null;
+  return Object.fromEntries(ids.map((id) => [id, value[id] ?? 0])) as Record<T, number>;
 }
 function parsePet(value: unknown, version = 3): Pet | null {
   if (version === 2) {
@@ -910,7 +1268,7 @@ function parsePet(value: unknown, version = 3): Pet | null {
     return null;
   if (!needIds.every((need) => validNumber((value.needs as Record<string, unknown>)[need], 0, 100)))
     return null;
-  const diet = counters(value.diet, recipeIds);
+  const diet = counters(value.diet, recipeIds, MAX_COUNTER, legacyRecipeIds);
   if (!diet) return null;
   return {
     id: value.id,
@@ -982,8 +1340,13 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
         !record(data.inventory)
       )
         return null;
-      const materials = counters(data.inventory.materials, materialIds);
-      const food = counters(data.inventory.food, recipeIds);
+      const materials = counters(
+        data.inventory.materials,
+        materialIds,
+        MAX_COUNTER,
+        legacyMaterialIds,
+      );
+      const food = counters(data.inventory.food, recipeIds, MAX_COUNTER, legacyRecipeIds);
       if (!materials || !food || !recipeIds.includes(data.selectedFood as RecipeId)) return null;
       next.currentBiome = data.currentBiome as BiomeId;
       next.inventory = { materials, food };
@@ -1025,11 +1388,25 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
           expedition.endsAt - expedition.startedAt !== EXPEDITION_SECONDS * 1000
         )
           return null;
-        const rewards = counters(expedition.rewards, materialIds, 20);
+        const principalParticipates =
+          expedition.principalParticipates === undefined ? true : expedition.principalParticipates;
+        const cookingLevel = expedition.cookingLevel === undefined ? 1 : expedition.cookingLevel;
+        const lootVersion = expedition.lootVersion === undefined ? 1 : expedition.lootVersion;
+        if (
+          typeof principalParticipates !== 'boolean' ||
+          (!principalParticipates && expedition.companionIds.length === 0) ||
+          !validInteger(cookingLevel, 1, MAX_COOKING_LEVEL) ||
+          (lootVersion !== 1 && lootVersion !== 2)
+        )
+          return null;
+        const rewards = counters(expedition.rewards, materialIds, 20, legacyMaterialIds);
         const expectedRewards = expeditionRewards(
           expedition.biome as BiomeId,
           expedition.companionIds.length,
           next.pet.seed,
+          principalParticipates,
+          cookingLevel,
+          lootVersion,
         );
         if (!rewards || materialIds.some((id) => rewards[id] !== expectedRewards[id])) return null;
         next.expedition = {
@@ -1039,6 +1416,9 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
           startedAt: expedition.startedAt,
           endsAt: expedition.endsAt,
           rewards,
+          principalParticipates,
+          cookingLevel,
+          lootVersion,
         };
       }
     }
@@ -1071,6 +1451,25 @@ export function parseSave(raw: string | null | undefined, now = Date.now()): Gam
       )
         return null;
       next.decorations = [...data.decorations] as DecorationId[];
+    }
+    if (data.cooking !== undefined) {
+      if (
+        !record(data.cooking) ||
+        !validInteger(data.cooking.xp) ||
+        !Array.isArray(data.cooking.discovered) ||
+        data.cooking.discovered.length > recipeIds.length ||
+        new Set(data.cooking.discovered).size !== data.cooking.discovered.length ||
+        data.cooking.discovered.some((id) => !recipeIds.includes(id as RecipeId))
+      )
+        return null;
+      next.cooking = {
+        xp: data.cooking.xp,
+        discovered: [...data.cooking.discovered] as RecipeId[],
+      };
+    } else {
+      next.cooking.discovered = recipeIds.filter(
+        (id) => next.inventory.food[id] > 0 || next.pet.diet[id] > 0 || id === 'fruit-bowl',
+      );
     }
     return advanceTime(next, now);
   } catch {

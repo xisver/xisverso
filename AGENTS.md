@@ -8,6 +8,6 @@
 - Las futuras recompensas en línea deben validarse en un servidor. El estado local no es una prueba de recursos legítimos.
 - Mantener guardados versionados y migración v1/v2 a v3, necesidades entre 0 y 100 y ausencia sin muerte permanente. Apetito usa 100 para lleno y 0 para mucha hambre.
 - Respetar las etapas huevo (5 horas), bebé (20 horas), joven (3 días) y adulto. La edad usa todo el tiempo real; limitar solo el deterioro por ausencia. Las caricias siempre están permitidas. Solo añaden vínculo si el Ánimo previo es menor de 30; nunca dan XP ni crecimiento.
-- La exploración requiere que la mascota principal sea adulta. Máximo dos salidas por día calendario de Ciudad de México y ocho horas entre inicios. Solo explorar entrega ingredientes; los minijuegos dan puntos y Ánimo.
+- La exploración requiere al menos una mascota adulta participante, principal o libre. Si la principal aún crece, seleccionar un adulto libre antes de salir. Máximo dos salidas por día calendario de Ciudad de México y ocho horas entre inicios. Explorar entrega ingredientes y la tienda también permite comprarlos con puntos. Los minijuegos dan puntos y Ánimo. La cocina mezcla de una a tres unidades, conserva nivel y recetas descubiertas, y consume ingredientes solo al completar la preparación.
 - Verificación: `npm.cmd test`, `npm.cmd run build`; cambios de interfaz o flujos, `npm.cmd run test:e2e` (Chrome instalado, ejecución sin ventana).
 - No añadir licencias de código abierto, servicios de pago ni despliegues públicos sin instrucciones del propietario.

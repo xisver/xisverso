@@ -3967,3 +3967,192 @@ dialog h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* The leaf changes the world; the centered sign belongs to the current companion. */
+.game-hud {
+  grid-template-columns: minmax(48px, 1fr) auto minmax(150px, 1fr);
+  align-items: start;
+}
+.game-hud .pet-status-button {
+  position: relative;
+  top: auto;
+  left: auto;
+  min-width: 210px;
+  max-width: 290px;
+  padding: 11px 16px;
+  gap: 12px;
+  justify-self: center;
+}
+.pet-hud-copy {
+  min-width: 0;
+  flex: 1;
+}
+.hud-needs {
+  display: flex;
+  gap: 5px;
+  margin-top: 7px;
+}
+.hud-need {
+  display: block;
+  width: 33px;
+  height: 4px;
+  overflow: hidden;
+  background: #d9e2ce;
+  border-radius: 4px;
+}
+.hud-need > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.game-brand.biome-switch {
+  cursor: pointer;
+}
+.game-brand.biome-switch .brand-mark {
+  transition: transform 0.2s;
+}
+.game-brand.biome-switch:hover .brand-mark {
+  transform: rotate(6deg) scale(1.05);
+}
+.game-brand #biome-name {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  margin-top: 5px;
+}
+.explore-sign.world-sign {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  left: auto;
+  right: 35px;
+  bottom: 150px;
+  width: 64px;
+  height: 64px;
+  min-width: 0;
+  padding: 12px;
+  border: 2px solid #e7ead1;
+  border-radius: 50%;
+  background: #fffdebbf;
+  box-shadow:
+    0 5px 0 #72895122,
+    0 8px 24px #45644915;
+  transform: none;
+}
+.explore-sign.world-sign > .icon {
+  width: 34px;
+  height: 34px;
+  color: #6d8b5b;
+}
+.exploration-lock {
+  position: absolute;
+  inset: 5px;
+  width: 50px;
+  height: 50px;
+  fill: none;
+  stroke: #d05757;
+  stroke-width: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.explore-sign.is-locked .exploration-lock {
+  opacity: 1;
+}
+.explore-sign.is-locked > .icon {
+  opacity: 0.55;
+}
+.expedition-scene {
+  display: block;
+  width: 100%;
+  height: 260px;
+  border-radius: 22px;
+  margin-bottom: 18px;
+  border: 1px solid #d5dfc5;
+}
+.expedition-journey {
+  padding: 15px;
+}
+@media (max-width: 700px) {
+  .game-hud {
+    grid-template-columns: 44px minmax(100px, 1fr) auto;
+    gap: 8px;
+    left: 12px;
+    right: 12px;
+  }
+  .game-hud .brand-copy {
+    display: none;
+  }
+  .game-hud .pet-status-button {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    padding: 8px 10px;
+    min-height: 60px;
+    border-radius: 15px;
+    gap: 4px;
+  }
+  .game-hud #pet-name {
+    font-size: 14px;
+    max-width: 100%;
+  }
+  .game-hud #scene-mood {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 9px;
+    max-width: 100%;
+  }
+  .game-hud .status-chevron {
+    display: none;
+  }
+  .hud-need {
+    flex: 1;
+    width: auto;
+    min-width: 10px;
+  }
+  .game-hud .hud-right {
+    gap: 5px;
+  }
+  .game-hud .menu-button {
+    width: 36px;
+    height: 44px;
+  }
+  .game-hud .wallet {
+    min-height: 44px;
+    padding: 8px;
+  }
+  .explore-sign.world-sign {
+    width: 54px;
+    height: 54px;
+    right: 18px;
+    bottom: 143px;
+    padding: 9px;
+  }
+  .exploration-lock {
+    inset: 3px;
+    width: 44px;
+    height: 44px;
+  }
+  .expedition-scene {
+    height: 220px;
+  }
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  .game-hud .pet-status-button {
+    min-height: 46px;
+    padding: 6px 12px;
+  }
+  .hud-needs {
+    margin-top: 4px;
+  }
+  .explore-sign.world-sign {
+    bottom: 100px;
+    right: 20px;
+  }
+  .expedition-scene {
+    height: 180px;
+  }
+}
+.explore-sign.world-sign::after {
+  display: none;
+}

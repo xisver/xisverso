@@ -1,12 +1,14 @@
 import type { Pet } from './domain/game';
 
-export type MiniGameId = 'fireflies' | 'fruit' | 'puddles' | 'rhythm' | 'memory' | 'ball';
+export type MiniGameId =
+  'fireflies' | 'fruit' | 'puddles' | 'rhythm' | 'memory' | 'ball' | 'coconut';
 export const MINI_GAMES: {
   id: MiniGameId;
   name: string;
   icon: string;
   instructions: string;
   unit: string;
+  durationSeconds: number;
 }[] = [
   {
     id: 'fireflies',
@@ -15,6 +17,7 @@ export const MINI_GAMES: {
     instructions:
       'Elige una luciérnaga. Tu mascota irá a buscarla: cuenta cuando llegue hasta ella.',
     unit: 'luciérnagas',
+    durationSeconds: 20,
   },
   {
     id: 'fruit',
@@ -23,6 +26,7 @@ export const MINI_GAMES: {
     instructions:
       'Mueve a tu mascota a izquierda o derecha para recoger la fruta antes de que toque el suelo.',
     unit: 'frutas',
+    durationSeconds: 20,
   },
   {
     id: 'puddles',
@@ -31,14 +35,16 @@ export const MINI_GAMES: {
     instructions:
       'Espera a que el charco llegue a tu mascota y pulsa Saltar. Un salto a tiempo vale un punto.',
     unit: 'saltos',
+    durationSeconds: 20,
   },
   {
     id: 'rhythm',
-    name: 'Baile del bosque',
+    name: 'Ritmo del bosque',
     icon: '♫',
     instructions:
-      'Sigue la flecha cuando el aro llegue al centro. Tu mascota baila contigo. Usa las flechas o los botones.',
+      'Escucha la melodía y sigue la flecha justo cuando el aro cierre al compás. Usa las flechas o los botones.',
     unit: 'pasos',
+    durationSeconds: 20,
   },
   {
     id: 'memory',
@@ -47,6 +53,7 @@ export const MINI_GAMES: {
     instructions:
       'Mira las piedras que se iluminan y repite el camino en ese orden. Tu mascota recorrerá cada paso.',
     unit: 'recuerdos',
+    durationSeconds: 20,
   },
   {
     id: 'ball',
@@ -55,6 +62,16 @@ export const MINI_GAMES: {
     instructions:
       'Toca el claro para guiar a tu mascota. Acércate a la pelota desde el lado opuesto al arco y empújala hasta la meta. Las flechas también sirven.',
     unit: 'goles',
+    durationSeconds: 20,
+  },
+  {
+    id: 'coconut',
+    name: '¿Bajo qué coco?',
+    icon: '◒',
+    instructions:
+      'Mira dónde se esconde tu mascota, sigue los cocos al mezclarse y encuéntrala tres veces. Cada ronda se mezcla más rápido. Elige con 1, 2, 3 o los botones.',
+    unit: 'encuentros',
+    durationSeconds: 60,
   },
 ];
 
@@ -64,6 +81,8 @@ interface Options {
   pet: Pick<Pet, 'name' | 'seed' | 'biome' | 'stage'>;
   onScore: (score: number) => void;
   onSound: () => void;
+  onRhythmBeat?: (midi: number, hit?: boolean) => void;
+  onComplete?: () => void;
 }
 const clamp = (n: number, a = 0, b = 1) => Math.min(b, Math.max(a, n));
 const directions = ['←', '↑', '→', '↓'];
@@ -75,7 +94,15 @@ const keyDirections: Record<string, number> = {
 };
 
 /** Every score is driven by a pet action, a catch, a timed jump, a dance or a solved path. */
-export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
+export function mountMiniGame({
+  field,
+  kind,
+  pet,
+  onScore,
+  onSound,
+  onRhythmBeat,
+  onComplete,
+}: Options) {
   field.innerHTML =
     '<canvas class="activity-canvas" role="img"></canvas><p class="activity-status" role="status"></p><div class="activity-controls"></div>';
   const canvas = field.querySelector<HTMLCanvasElement>('canvas')!;
@@ -119,6 +146,24 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
   ];
   const ball = { x: 0.45, y: 0.61, vx: 0, vy: 0 };
   let goalY = 0.55;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let nextBeat = 0;
+  let beatNumber = 0;
+  const melody = [60, 64, 67, 72, 67, 64, 62, 67, 65, 69, 72, 76, 72, 69, 67, 62];
+  type CoconutPhase = 'reveal' | 'shuffle' | 'choose' | 'result' | 'complete';
+  let coconutPhase: CoconutPhase = 'reveal';
+  let coconutRound = 0;
+  let coconutTarget = Math.floor(Math.random() * 3);
+  let coconutPositions = [0, 1, 2];
+  let coconutFrom = [0, 1, 2];
+  let coconutSwap = [0, 1];
+  let coconutSwapsDone = 0;
+  let coconutPhaseAt = 0;
+  let coconutCorrect = false;
+  let coconutSelection = -1;
+  let coconutFinished = false;
+  const coconutButtons: HTMLButtonElement[] = [];
+  const coconutSwapSeconds = () => [0.7, 0.48, 0.29][coconutRound];
   const say = (text: string) => {
     if (status.textContent !== text) status.textContent = text;
   };
@@ -151,12 +196,13 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
     danceAt = time;
     const offset = time - rhythmStart;
     rhythmResolved = true;
-    if (direction === rhythmDirection && Math.abs(offset - 1.15) < 0.38) {
+    if (direction === rhythmDirection && Math.abs(offset - 1) < 0.3) {
       award();
+      onRhythmBeat?.(84 + direction * 2, true);
       say('¡Al compás!');
     } else
       say(
-        offset < 0.77
+        offset < 0.7
           ? 'Espera a que el aro llegue al centro.'
           : 'Sigue la flecha en el próximo compás.',
       );
@@ -174,6 +220,75 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
     player.tx = stonePoints[index].x;
     player.ty = stonePoints[index].y;
     say('Tu mascota sigue la piedra…');
+  }
+  function prepareCoconutSwap() {
+    coconutFrom = [...coconutPositions];
+    const first = Math.floor(Math.random() * 3);
+    let second = Math.floor(Math.random() * 2);
+    if (second >= first) second++;
+    coconutSwap = [first, second];
+    coconutPhaseAt = time;
+  }
+  function restartCoconutRound() {
+    coconutPhase = 'reveal';
+    coconutPhaseAt = time;
+    coconutPositions = [0, 1, 2];
+    coconutFrom = [...coconutPositions];
+    coconutTarget = Math.floor(Math.random() * 3);
+    coconutSwapsDone = 0;
+    coconutSelection = -1;
+    coconutButtons.forEach((item) => (item.disabled = true));
+    say('Ronda ' + (coconutRound + 1) + '/3 · Mira dónde se esconde ' + pet.name + '.');
+  }
+  function chooseCoconut(slot: number) {
+    if (disposed || coconutPhase !== 'choose' || coconutFinished) return;
+    coconutSelection = slot;
+    coconutCorrect = coconutPositions[coconutTarget] === slot;
+    coconutPhase = 'result';
+    coconutPhaseAt = time;
+    coconutButtons.forEach((item) => (item.disabled = true));
+    if (coconutCorrect) {
+      if (score === 2) {
+        coconutFinished = true;
+        coconutPhase = 'complete';
+      }
+      award();
+      say(
+        score === 3
+          ? '¡Encontraste a tu mascota las tres veces!'
+          : '¡Ahí está! ' + score + '/3 encuentros.',
+      );
+      if (coconutFinished) onComplete?.();
+    } else {
+      onSound();
+      say('Estaba bajo otro coco. Mira de nuevo: puedes repetir esta ronda.');
+    }
+  }
+  function stepCoconuts() {
+    if (coconutPhase === 'reveal' && time - coconutPhaseAt >= 1.25) {
+      coconutPhase = 'shuffle';
+      coconutSwapsDone = 0;
+      prepareCoconutSwap();
+      say('Ronda ' + (coconutRound + 1) + '/3 · Sigue los cocos.');
+    } else if (coconutPhase === 'shuffle' && time - coconutPhaseAt >= coconutSwapSeconds()) {
+      const [first, second] = coconutSwap;
+      [coconutPositions[first], coconutPositions[second]] = [
+        coconutPositions[second],
+        coconutPositions[first],
+      ];
+      coconutSwapsDone++;
+      if (coconutSwapsDone >= 4 + coconutRound * 2) {
+        coconutPhase = 'choose';
+        coconutButtons.forEach((item) => (item.disabled = false));
+        say('Ronda ' + (coconutRound + 1) + '/3 · ¿Bajo qué coco está ' + pet.name + '?');
+      } else prepareCoconutSwap();
+    } else if (coconutPhase === 'result' && time - coconutPhaseAt >= 1.15) {
+      if (coconutCorrect) coconutRound++;
+      restartCoconutRound();
+    }
+    field.dataset.coconutPhase = coconutPhase;
+    field.dataset.coconutRound = String(coconutRound + 1);
+    field.dataset.coconutSpeed = coconutSwapSeconds().toFixed(2);
   }
   function newFly(button: HTMLButtonElement, index: number) {
     // Five separate lanes keep targets apart and within reach on small screens.
@@ -216,6 +331,10 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
         rhythmInput(i),
       ),
     );
+  } else if (kind === 'coconut') {
+    for (let i = 0; i < 3; i++)
+      coconutButtons.push(button(String(i + 1), 'Coco ' + (i + 1), () => chooseCoconut(i)));
+    restartCoconutRound();
   } else if (kind === 'memory') {
     say('Mira el camino iluminado.');
     stonePoints.forEach((_, i) => button(`${i + 1}`, `Piedra ${i + 1}`, () => chooseStone(i)));
@@ -240,6 +359,10 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
         if (direction === 0 || direction === 2) moveHorizontal(direction === 0 ? -0.12 : 0.12);
         else player.ty = clamp(player.ty + (direction === 1 ? -0.1 : 0.1), 0.3, 0.78);
       }
+    }
+    if (kind === 'coconut' && /^[1-3]$/.test(event.key)) {
+      event.preventDefault();
+      chooseCoconut(Number(event.key) - 1);
     }
     if (kind === 'memory' && /^[1-4]$/.test(event.key)) {
       event.preventDefault();
@@ -311,6 +434,82 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
     ctx.textAlign = 'center';
     ctx.fillText(pet.name, x, floor + 24);
   }
+  function drawCoconuts() {
+    const centerY = height * 0.66;
+    const radius = Math.min(68, width * 0.115);
+    const positions = [...coconutPositions];
+    let swapProgress = 0;
+    if (coconutPhase === 'shuffle') {
+      swapProgress = clamp((time - coconutPhaseAt) / coconutSwapSeconds());
+      const ease = swapProgress * swapProgress * (3 - 2 * swapProgress);
+      const [first, second] = coconutSwap;
+      positions[first] = coconutFrom[first] + (coconutFrom[second] - coconutFrom[first]) * ease;
+      positions[second] = coconutFrom[second] + (coconutFrom[first] - coconutFrom[second]) * ease;
+    }
+    const reveal =
+      coconutPhase === 'reveal' || coconutPhase === 'result' || coconutPhase === 'complete';
+    if (reveal) {
+      const saved = { x: player.x, y: player.y };
+      player.x = 0.2 + positions[coconutTarget] * 0.3;
+      player.y = 0.66;
+      drawPet();
+      player.x = saved.x;
+      player.y = saved.y;
+    }
+    for (let i = 0; i < 3; i++) {
+      const x = (0.2 + positions[i] * 0.3) * width;
+      const moving = coconutPhase === 'shuffle' && coconutSwap.includes(i);
+      const arc = moving
+        ? Math.sin(swapProgress * Math.PI) *
+          (i === coconutSwap[0] ? -1 : 1) *
+          (reducedMotion.matches ? 7 : 34)
+        : 0;
+      const lifted = reveal && i === coconutTarget;
+      const lift = lifted ? radius * 1.8 : 0;
+      ellipse(x, centerY + 16 + arc * 0.2, radius * 1.08, radius * 0.2, '#3b43312d');
+      ctx.save();
+      ctx.translate(x, centerY + arc - lift);
+      const brown = ctx.createLinearGradient(0, -radius, 0, radius * 0.3);
+      brown.addColorStop(0, '#ae7e4e');
+      brown.addColorStop(1, '#67442e');
+      ctx.beginPath();
+      ctx.moveTo(-radius, 12);
+      ctx.bezierCurveTo(-radius * 1.05, -radius * 1.25, radius * 1.05, -radius * 1.25, radius, 12);
+      ctx.closePath();
+      ctx.fillStyle = brown;
+      ctx.fill();
+      ctx.strokeStyle = '#593f2d';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      for (let line = -2; line <= 2; line++) {
+        ctx.beginPath();
+        ctx.moveTo(line * radius * 0.2, -radius * 0.65);
+        ctx.quadraticCurveTo(line * radius * 0.32, -radius * 0.15, line * radius * 0.37, 7);
+        ctx.strokeStyle = '#d1a57270';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      ellipse(0, 12, radius, radius * 0.17, '#f4e7cb');
+      ellipse(0, 12, radius * 0.82, radius * 0.08, '#a68358');
+      // Small markings let players follow the physical shells, including reduced motion.
+      for (let mark = 0; mark <= i; mark++)
+        ellipse((mark - i / 2) * 8, -radius * 0.42, 2.3, 2.3, '#f3ddab');
+      ctx.restore();
+    }
+    ctx.textAlign = 'center';
+    ctx.font = '600 16px system-ui';
+    ctx.fillStyle = '#fff6d5';
+    ctx.fillText('RONDA ' + (coconutRound + 1) + ' DE 3', width / 2, height * 0.15);
+    for (let i = 0; i < 3; i++) {
+      ellipse(width / 2 + (i - 1) * 24, height * 0.23, 7, 7, i < score ? '#ffdf7d' : '#ffffff45');
+      ctx.fillStyle = '#fff6d5';
+      ctx.fillText(String(i + 1), width * (0.2 + i * 0.3), centerY + radius + 22);
+    }
+    if (coconutPhase === 'result' && !coconutCorrect && coconutSelection >= 0) {
+      ctx.font = '20px system-ui';
+      ctx.fillText('↗', width * (0.2 + coconutSelection * 0.3), centerY + radius + 46);
+    }
+  }
   function draw() {
     const night = kind === 'fireflies';
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
@@ -349,7 +548,7 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
       ctx.fillText('SALTA AQUÍ', player.x * width, height * 0.39);
     }
     if (kind === 'rhythm') {
-      const progress = clamp((time - rhythmStart) / 1.15);
+      const progress = clamp(time - rhythmStart);
       ctx.strokeStyle = '#fff8c6';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -390,7 +589,8 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
       field.dataset.ballX = ball.x.toFixed(3);
       field.dataset.ballY = ball.y.toFixed(3);
     }
-    drawPet();
+    if (kind === 'coconut') drawCoconuts();
+    else drawPet();
     canvas.dataset.petX = player.x.toFixed(3);
     canvas.dataset.petY = player.y.toFixed(3);
   }
@@ -448,6 +648,13 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
         }
         field.dataset.puddleX = puddleX.toFixed(3);
       }
+      if (kind === 'rhythm' && time >= nextBeat) {
+        onRhythmBeat?.(melody[beatNumber % melody.length]);
+        beatNumber++;
+        nextBeat += 0.5;
+        field.dataset.rhythmBeat = String(beatNumber);
+      }
+      if (kind === 'coconut') stepCoconuts();
       if (kind === 'rhythm' && time - rhythmStart >= 2) {
         rhythmStart = time;
         rhythmDirection = (rhythmDirection + 1 + Math.floor(Math.random() * 3)) % 4;
@@ -506,7 +713,7 @@ export function mountMiniGame({ field, kind, pet, onScore, onSound }: Options) {
       }
     }
     draw();
-    frame = requestAnimationFrame(step);
+    if (!disposed) frame = requestAnimationFrame(step);
   }
   function resize() {
     const bounds = field.getBoundingClientRect();

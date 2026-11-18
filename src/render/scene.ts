@@ -89,7 +89,18 @@ export function createScene(
   let lastInteraction = 0;
   let nextWander = 9;
   let groundMarker = { x: 0, y: 0, until: 0 };
-  let pointerStart: { x: number; y: number; id: number } | null = null;
+  let pointerStart: {
+    x: number;
+    y: number;
+    id: number;
+    touch: boolean;
+    lastX: number;
+    lastY: number;
+    distance: number;
+    stroked: boolean;
+    wasOverPet: boolean;
+  } | null = null;
+  let lastTouchStroke = -Infinity;
   let width = 1;
   let height = 1;
   let pointer = 0;
@@ -840,6 +851,7 @@ export function createScene(
           (friend.id === socialId && clock < socialUntil) ||
           (seconds + visitOffset(friend.id)) % 180 < 24,
       )
+      .sort((left, right) => Number(right.id === socialId) - Number(left.id === socialId))
       .slice(0, 2);
     for (const id of visitorSlots.keys())
       if (!visible.some((friend) => friend.id === id)) visitorSlots.delete(id);
@@ -1398,6 +1410,28 @@ export function createScene(
   }
   function pointerMove(event: PointerEvent) {
     const point = eventPosition(event);
+    const contact = pointerStart;
+    if (contact?.touch && contact.id === event.pointerId && tool === 'hand') {
+      const inside = overPet(point.x, point.y);
+      if (inside && contact.wasOverPet)
+        contact.distance += Math.hypot(
+          event.clientX - contact.lastX,
+          event.clientY - contact.lastY,
+        );
+      contact.lastX = event.clientX;
+      contact.lastY = event.clientY;
+      contact.wasOverPet = inside;
+      if (inside && contact.distance >= 28 && performance.now() - lastTouchStroke >= 300) {
+        contact.distance = 0;
+        contact.stroked = true;
+        lastTouchStroke = performance.now();
+        lastInteraction = clock;
+        nextWander = clock + 12;
+        destination = { ...position };
+        walking = false;
+        options.onPetInteract?.('hand');
+      }
+    }
     targetPointer = Math.max(-1, Math.min(1, (point.x - position.x) * 4));
     canvas.style.cursor = overPet(point.x, point.y)
       ? tool === 'hand'
@@ -1413,18 +1447,59 @@ export function createScene(
   }
   function pointerDown(event: PointerEvent) {
     if (!event.isPrimary || event.button !== 0) return;
-    pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    const point = eventPosition(event);
+    const touch = event.pointerType === 'touch' && tool === 'hand';
+    pointerStart = {
+      x: event.clientX,
+      y: event.clientY,
+      id: event.pointerId,
+      touch,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      distance: 0,
+      stroked: false,
+      wasOverPet: overPet(point.x, point.y),
+    };
+    if (touch) {
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch {
+        /* Synthetic events need no capture. */
+      }
+      if (pointerStart.wasOverPet) {
+        destination = { ...position };
+        walking = false;
+        lastInteraction = clock;
+        nextWander = clock + 12;
+      }
+    }
+  }
+  function releasePointer(id: number) {
+    try {
+      if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+    } catch {
+      /* Already released. */
+    }
   }
   function pointerUp(event: PointerEvent) {
     const start = pointerStart;
+    if (start && start.id !== event.pointerId) return;
     pointerStart = null;
+    if (start) releasePointer(start.id);
+    const point = eventPosition(event);
+    // Touch affection is a stroke, while taps still operate other tools and walking.
+    if (
+      start?.touch &&
+      tool === 'hand' &&
+      (start.stroked || start.wasOverPet || overPet(point.x, point.y))
+    )
+      return;
     if (
       !start ||
       start.id !== event.pointerId ||
       Math.hypot(event.clientX - start.x, event.clientY - start.y) > 14
     )
       return;
-    const point = eventPosition(event);
     if (overPet(point.x, point.y)) {
       lastInteraction = clock;
       nextWander = clock + 12;
@@ -1437,10 +1512,17 @@ export function createScene(
       else if (point.y > 0.32 && pet.stage !== 'egg') moveTo(point.x, point.y, true);
     }
   }
-  function pointerLeave() {
-    targetPointer = 0;
+  function pointerCancel(event?: PointerEvent) {
+    if (pointerStart && event && pointerStart.id !== event.pointerId) return;
+    const start = pointerStart;
     pointerStart = null;
+    if (start) releasePointer(start.id);
+    targetPointer = 0;
     canvas.style.cursor = 'default';
+  }
+  function pointerLeave() {
+    if (pointerStart?.touch && canvas.hasPointerCapture(pointerStart.id)) return;
+    pointerCancel();
   }
   function motionChange() {
     if (frame) cancelAnimationFrame(frame);
@@ -1455,7 +1537,8 @@ export function createScene(
   canvas.addEventListener('pointermove', pointerMove);
   canvas.addEventListener('pointerdown', pointerDown);
   canvas.addEventListener('pointerup', pointerUp);
-  canvas.addEventListener('pointercancel', pointerLeave);
+  canvas.addEventListener('pointercancel', pointerCancel);
+  canvas.addEventListener('lostpointercapture', pointerCancel);
   canvas.addEventListener('pointerleave', pointerLeave);
   motion.addEventListener('change', motionChange);
   // Reduced motion stops animation frames, but visitors still follow real time.
@@ -1565,7 +1648,9 @@ export function createScene(
       canvas.removeEventListener('pointermove', pointerMove);
       canvas.removeEventListener('pointerdown', pointerDown);
       canvas.removeEventListener('pointerup', pointerUp);
-      canvas.removeEventListener('pointercancel', pointerLeave);
+      pointerCancel();
+      canvas.removeEventListener('pointercancel', pointerCancel);
+      canvas.removeEventListener('lostpointercapture', pointerCancel);
       canvas.removeEventListener('pointerleave', pointerLeave);
       motion.removeEventListener('change', motionChange);
       particles = [];

@@ -23,6 +23,11 @@ import {
   renamePet,
   releaseAdult,
   craftFood,
+  cookIngredients,
+  purchaseIngredient,
+  getCookingProgress,
+  MAX_COOKING_LEVEL,
+  COOKING_XP_PER_LEVEL,
   selectFood,
   startExpedition,
   completeExpedition,
@@ -70,8 +75,8 @@ test('new games begin with an egg, no points or ingredients and one prepared mea
   assert.ok(Object.values(state.inventory.materials).every((amount) => amount === 0));
   assert.deepEqual(state.explorationStarts, []);
   assert.equal(BIOMES.length, 3);
-  assert.equal(MATERIALS.length, 5);
-  assert.equal(RECIPES.length, 3);
+  assert.equal(MATERIALS.length, 12);
+  assert.equal(RECIPES.length, 13);
   assert.deepEqual(parseSave(serializeSave(state), NOW), state);
 });
 
@@ -247,7 +252,14 @@ test('several generations retain distinct identities and survive saving and visi
 
 test('cooking spends exact ingredients atomically and selects the resulting dish', () => {
   const state = young();
-  state.inventory.materials = { berries: 2, grain: 1, kelp: 0, root: 0, herb: 1 };
+  state.inventory.materials = {
+    ...state.inventory.materials,
+    berries: 2,
+    grain: 1,
+    kelp: 0,
+    root: 0,
+    herb: 1,
+  };
   const before = serializeSave(state);
   const missing = craftFood(state, 'sea-soup', state.lastUpdated);
   assert.equal(missing.success, false);
@@ -870,42 +882,40 @@ test('minigames grant at most five earned points and never supply food or ingred
   assert.equal(rewardMiniGame(stateWithEarnedPoints, 100, state.lastUpdated).state.coins, 142);
 });
 
-test('only an adult principal pet can explore, regardless of free adult companions', () => {
+test('any owned adult can explore while a growing principal stays home', () => {
   const parent = adult();
   const released = releaseAdult(parent, parent.lastUpdated).state;
-  const states = [
+  for (const state of [
     released,
     advanceTime(released, released.lastUpdated + LIFECYCLE.eggSeconds * 1000),
     advanceTime(released, released.lastUpdated + YOUNG_SECONDS * 1000),
-  ];
-  for (const state of states) {
-    assert.ok(state.freePets.some((pet) => pet.stage === 'adult'));
+  ]) {
+    assert.equal(getExplorationAvailability(state, state.lastUpdated).canStart, true);
     const before = serializeSave(state);
-    const availability = getExplorationAvailability(state, state.lastUpdated);
-    assert.equal(availability.reason, 'stage');
-    assert.equal(availability.canStart, false);
-    assert.equal(availability.remaining, 2);
-    const rejected = startExpedition(state, [state.freePets[0].id], state.lastUpdated);
-    assert.equal(rejected.success, false);
-    assert.match(rejected.message, /mascota principal.*adulta/);
-    assert.equal(serializeSave(rejected.state), before);
+    const empty = startExpedition(state, [], state.lastUpdated);
+    assert.equal(empty.success, false);
+    const departure = startExpedition(state, [state.freePets[0].id], state.lastUpdated);
+    assert.equal(departure.success, true);
+    assert.equal(departure.state.expedition!.principalParticipates, false);
+    assert.equal(departure.state.expedition!.rewards.grain, 1);
+    assert.equal(departure.state.expedition!.rewards.seeds, 1);
+    assert.equal(departure.state.pet.id, state.pet.id);
+    assert.deepEqual(parseSave(serializeSave(departure.state), state.lastUpdated), departure.state);
     assert.equal(serializeSave(state), before);
   }
+  const noAdults = createGame(NOW);
+  assert.equal(getExplorationAvailability(noAdults, NOW).reason, 'stage');
+  assert.equal(startExpedition(noAdults, [], NOW).success, false);
   const nearlyAdult = young();
   nearlyAdult.pet.growthSeconds = ADULT_SECONDS - 1;
   assert.equal(
     getExplorationAvailability(nearlyAdult, nearlyAdult.lastUpdated + 999).reason,
     'stage',
   );
-  assert.equal(
-    getExplorationAvailability(nearlyAdult, nearlyAdult.lastUpdated + 1000).canStart,
-    true,
-  );
   const departure = startExpedition(nearlyAdult, [], nearlyAdult.lastUpdated + 1000);
   assert.equal(departure.success, true);
-  assert.equal(departure.state.pet.stage, 'adult');
+  assert.equal(departure.state.expedition!.principalParticipates, true);
 });
-
 test('two departures reset at Mexico City midnight while the eight-hour cooldown persists', () => {
   assert.equal(EXPEDITIONS_PER_DAY, 2);
   assert.equal(EXPEDITION_COOLDOWN_HOURS, 8);
@@ -987,7 +997,7 @@ test('exploration restrictions survive saving, travel, pet release and a backwar
     remaining: 1,
     nextAvailableAt: at + 8 * HOUR,
     canStart: false,
-    reason: 'stage',
+    reason: 'cooldown',
   });
   assert.equal(startExpedition(restored, [], at - HOUR).success, false);
   assert.equal(startExpedition(restored, [], at + 8 * HOUR).success, false);
@@ -1091,4 +1101,228 @@ test('minigame points buy decorations while raising mood without granting ingred
   assert.equal(purchase.state.coins, 0);
   assert.deepEqual(purchase.state.decorations, ['flowers']);
   assert.deepEqual(purchase.state.inventory, initialInventory);
+});
+
+test('cooking mixes exact quantities in any order and records discovery once', () => {
+  const state = createGame(NOW);
+  state.inventory.materials.seeds = 4;
+  state.inventory.materials.grain = 2;
+  const before = serializeSave(state);
+  const result = cookIngredients(state, ['seeds', 'grain', 'seeds'], NOW);
+  assert.equal(result.success, true);
+  assert.equal(result.recipeId, 'seed-crackers');
+  assert.equal(result.discovered, true);
+  assert.equal(result.xpGained, 12);
+  assert.equal(result.state.inventory.materials.seeds, 2);
+  assert.equal(result.state.inventory.materials.grain, 1);
+  assert.equal(result.state.inventory.food['seed-crackers'], 1);
+  assert.equal(result.state.selectedFood, 'seed-crackers');
+  assert.equal(result.state.cooking.xp, 12);
+  assert.equal(result.state.pet.growthSeconds, state.pet.growthSeconds);
+  assert.equal(serializeSave(state), before);
+  const twice = cookIngredients(result.state, ['grain', 'seeds', 'seeds'], NOW);
+  assert.equal(twice.success, true);
+  assert.equal(twice.discovered, false);
+  assert.equal(twice.state.cooking.discovered.filter((id) => id === 'seed-crackers').length, 1);
+  assert.deepEqual(parseSave(serializeSave(twice.state), NOW), twice.state);
+});
+
+test('unknown combinations make less nourishing strange food and it can feed a pet', () => {
+  const state = baby();
+  state.inventory.materials.berries = 1;
+  state.inventory.materials.kelp = 1;
+  state.pet.needs.appetite = 20;
+  const result = cookIngredients(state, ['berries', 'kelp'], state.lastUpdated);
+  assert.equal(result.success, true);
+  assert.equal(result.recipeId, 'strange-food');
+  assert.equal(result.xpGained, 3);
+  assert.equal(result.state.inventory.food['strange-food'], 1);
+  assert.equal(result.state.inventory.materials.berries, 0);
+  assert.equal(result.state.inventory.materials.kelp, 0);
+  const food = RECIPES.find((item) => item.id === 'strange-food')!;
+  assert.ok(
+    RECIPES.filter((item) => item.id !== food.id).every(
+      (item) => item.hungerRelief > food.hungerRelief,
+    ),
+  );
+  const fed = applyCare(result.state, 'feed', result.state.lastUpdated);
+  assert.equal(fed.success, true);
+  assert.equal(fed.state.pet.needs.appetite, 28);
+  assert.equal(fed.state.pet.diet['strange-food'], 1);
+  assert.equal(fed.state.inventory.food['strange-food'], 0);
+});
+
+test('invalid, excessive, missing or locked cooking inputs never spend inventory or grant experience', () => {
+  const state = createGame(NOW);
+  state.inventory.materials.berries = 1;
+  state.inventory.materials.cocoa = 1;
+  const before = serializeSave(state);
+  for (const input of [
+    [],
+    ['berries', 'berries'],
+    ['cocoa'],
+    ['berries', 'grain', 'herb', 'seeds'],
+    ['__proto__'],
+    null,
+    {},
+  ]) {
+    const result = cookIngredients(state, input as any, NOW);
+    assert.equal(result.success, false);
+    assert.equal(serializeSave(result.state), before);
+    assert.equal(serializeSave(state), before);
+  }
+  const full = structuredClone(state);
+  full.inventory.food['strange-food'] = 1_000_000_000;
+  assert.equal(cookIngredients(full, ['berries'], NOW).success, false);
+  assert.deepEqual(cookIngredients(full, ['berries'], NOW).state, full);
+});
+
+test('cooking progression unlocks recipe tiers and remains capped without changing pet age', () => {
+  let state = createGame(NOW);
+  state.inventory.materials.seeds = 10;
+  state.inventory.materials.grain = 5;
+  assert.deepEqual(getCookingProgress(state), {
+    level: 1,
+    xp: 0,
+    current: 0,
+    needed: 60,
+    progress: 0,
+  });
+  for (let index = 0; index < 5; index++)
+    state = cookIngredients(state, ['seeds', 'seeds', 'grain'], NOW).state;
+  assert.equal(getCookingProgress(state).level, 2);
+  assert.equal(getCookingProgress(state).current, 0);
+  state.inventory.materials.carrot = 1;
+  state.inventory.materials.herb = 1;
+  state.inventory.materials.seeds = 1;
+  const salad = cookIngredients(state, ['herb', 'seeds', 'carrot'], NOW);
+  assert.equal(salad.recipeId, 'garden-salad');
+  assert.equal(salad.discovered, true);
+  assert.equal(salad.state.pet.growthSeconds, 0);
+  const lockedRecipe = RECIPES.find((item) => item.id === 'aurora-feast')!;
+  assert.equal(craftFood(salad.state, lockedRecipe.id, NOW).success, false);
+  const expert = structuredClone(salad.state);
+  expert.cooking.xp = 1_000_000_000;
+  assert.equal(getCookingProgress(expert).level, MAX_COOKING_LEVEL);
+  assert.equal(getCookingProgress(expert).progress, 100);
+  assert.equal(COOKING_XP_PER_LEVEL, 60);
+});
+
+test('ingredient purchases spend earned points exactly and enforce levels, stock limits and valid quantities', () => {
+  const state = baby();
+  state.coins = 10;
+  const before = serializeSave(state);
+  const bought = purchaseIngredient(state, 'seeds', 3, state.lastUpdated);
+  assert.equal(bought.success, true);
+  assert.equal(bought.state.coins, 7);
+  assert.equal(bought.state.inventory.materials.seeds, 3);
+  assert.equal(serializeSave(state), before);
+  assert.equal(bought.state.cooking.xp, 0);
+  for (const quantity of [0, -1, 1.5, 100, Number.NaN, Infinity]) {
+    const rejected = purchaseIngredient(state, 'seeds', quantity, state.lastUpdated);
+    assert.equal(rejected.success, false);
+    assert.equal(serializeSave(rejected.state), before);
+  }
+  for (const id of ['cocoa', '__proto__']) {
+    const rejected = purchaseIngredient(state, id as any, 1, state.lastUpdated);
+    assert.equal(rejected.success, false);
+    assert.equal(serializeSave(rejected.state), before);
+  }
+  assert.equal(purchaseIngredient(state, 'berries', 6, state.lastUpdated).success, false);
+  const full = structuredClone(state);
+  full.inventory.materials.seeds = 1_000_000_000;
+  assert.deepEqual(purchaseIngredient(full, 'seeds', 1, state.lastUpdated).state, full);
+  for (const material of MATERIALS.filter((item) => item.unlockLevel > 1)) {
+    assert.ok(
+      material.price >
+        Math.max(
+          ...MATERIALS.filter((item) => item.unlockLevel < material.unlockLevel).map(
+            (item) => item.price,
+          ),
+        ),
+    );
+  }
+  const expert = structuredClone(state);
+  expert.cooking.xp = 5 * COOKING_XP_PER_LEVEL;
+  expert.coins = 16;
+  const cocoa = purchaseIngredient(expert, 'cocoa', 1, state.lastUpdated);
+  assert.equal(cocoa.success, true);
+  assert.equal(cocoa.state.coins, 0);
+  assert.deepEqual(parseSave(serializeSave(cocoa.state), state.lastUpdated), cocoa.state);
+});
+
+test('additive v3 migration fills new ingredients, recipes and cooking without losing old counters', () => {
+  const state = baby();
+  state.inventory.materials.berries = 7;
+  state.inventory.food['sea-soup'] = 2;
+  state.pet.diet['root-stew'] = 4;
+  const old = JSON.parse(serializeSave(state));
+  delete old.cooking;
+  const legacyMaterials = ['berries', 'grain', 'kelp', 'root', 'herb'];
+  const legacyRecipes = ['fruit-bowl', 'sea-soup', 'root-stew'];
+  for (const key of Object.keys(old.inventory.materials))
+    if (!legacyMaterials.includes(key)) delete old.inventory.materials[key];
+  for (const key of Object.keys(old.inventory.food))
+    if (!legacyRecipes.includes(key)) delete old.inventory.food[key];
+  for (const key of Object.keys(old.pet.diet))
+    if (!legacyRecipes.includes(key)) delete old.pet.diet[key];
+  const migrated = parseSave(JSON.stringify(old), state.lastUpdated)!;
+  assert.ok(migrated);
+  assert.equal(migrated.version, 3);
+  assert.equal(migrated.pet.id, state.pet.id);
+  assert.equal(migrated.inventory.materials.berries, 7);
+  assert.equal(migrated.inventory.materials.seeds, 0);
+  assert.equal(migrated.inventory.food['sea-soup'], 2);
+  assert.equal(migrated.inventory.food['strange-food'], 0);
+  assert.equal(migrated.pet.diet['root-stew'], 4);
+  assert.deepEqual(migrated.cooking.discovered.sort(), ['fruit-bowl', 'root-stew', 'sea-soup']);
+  assert.equal(migrated.cooking.xp, 0);
+  assert.deepEqual(parseSave(serializeSave(migrated), state.lastUpdated), migrated);
+});
+
+test('cooking saves reject invalid experience, duplicate recipes and malformed new counters', () => {
+  for (const cooking of [
+    null,
+    {},
+    { xp: -1, discovered: [] },
+    { xp: 0, discovered: ['unknown'] },
+    { xp: 0, discovered: ['fruit-bowl', 'fruit-bowl'] },
+    { xp: 1.5, discovered: [] },
+  ]) {
+    const state = createGame(NOW);
+    (state as any).cooking = cooking;
+    assert.equal(parseSave(serializeSave(state), NOW), null);
+  }
+  for (const field of ['seeds', 'cocoa']) {
+    const state = createGame(NOW);
+    (state.inventory.materials as any)[field] = -1;
+    assert.equal(parseSave(serializeSave(state), NOW), null);
+  }
+});
+
+test('expeditions snapshot cooking tier and actual adult party while preserving legacy loot', () => {
+  const state = adult();
+  state.cooking.xp = 5 * COOKING_XP_PER_LEVEL;
+  const advanced = startExpedition(state, [], state.lastUpdated).state;
+  assert.equal(advanced.expedition!.cookingLevel, 6);
+  assert.equal(advanced.expedition!.lootVersion, 2);
+  assert.equal(advanced.expedition!.rewards.seeds, 1);
+  assert.equal(advanced.expedition!.rewards.cocoa, 1);
+  assert.deepEqual(parseSave(serializeSave(advanced), state.lastUpdated), advanced);
+  const old = JSON.parse(serializeSave(advanced));
+  delete old.expedition.principalParticipates;
+  delete old.expedition.cookingLevel;
+  delete old.expedition.lootVersion;
+  for (const key of Object.keys(old.expedition.rewards))
+    if (!['berries', 'grain', 'kelp', 'root', 'herb'].includes(key))
+      delete old.expedition.rewards[key];
+  const restored = parseSave(JSON.stringify(old), state.lastUpdated)!;
+  assert.ok(restored);
+  assert.equal(restored.expedition!.lootVersion, 1);
+  assert.equal(restored.expedition!.rewards.seeds, 0);
+  assert.deepEqual(parseSave(serializeSave(restored), state.lastUpdated), restored);
+  const claimed = completeExpedition(restored, restored.expedition!.endsAt);
+  assert.equal(claimed.success, true);
+  assert.equal(claimed.rewards.seeds, 0);
+  assert.equal(claimed.rewards.berries, advanced.expedition!.rewards.berries);
 });

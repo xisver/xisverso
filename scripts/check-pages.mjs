@@ -87,7 +87,9 @@ try {
   assert.equal(before.currentBiome, 'coast');
   assert.equal(before.pet.seed % 3, 2);
   assert.equal(before.coins, 0);
-  assert.deepEqual(Object.values(before.inventory.materials), [0, 0, 0, 0, 0]);
+  assert.ok(Object.values(before.inventory.materials).every((amount) => amount === 0));
+  assert.equal(Object.keys(before.inventory.materials).length, 12);
+  assert.equal(before.cooking.xp, 0);
   await page.getByRole('button', { name: 'Caricias', exact: true }).click();
   const pet = await page.locator('#pet-interact').boundingBox();
   assert.ok(pet);
@@ -109,10 +111,19 @@ try {
     .getByRole('button', { name: 'Cocinar más raciones', exact: true })
     .click();
   await expect(page.locator('#kitchen-dialog')).toBeVisible();
+  const kitchenBounds = await page.locator('#kitchen-dialog').boundingBox();
+  assert.ok(kitchenBounds);
+  assert.equal(kitchenBounds.x, 0);
+  assert.equal(kitchenBounds.y, 0);
+  assert.equal(kitchenBounds.width, page.viewportSize().width);
+  assert.equal(kitchenBounds.height, page.viewportSize().height);
+  await expect(page.locator('#cooking-level')).toHaveText('1');
+  await expect(page.locator('#material-inventory [data-add-ingredient]')).toHaveCount(12);
+  await expect(page.locator('#explore-button')).toHaveAttribute('data-locked', 'true');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Explorar', exact: true }).click();
   await expect(page.locator('#start-expedition')).toBeDisabled();
-  await expect(page.locator('#exploration-wait')).toContainText('adulto');
+  await expect(page.locator('#exploration-wait')).toContainText(/adult[oa]/i);
   const waiting = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), saveKey);
   assert.equal(waiting.expedition, null);
   assert.deepEqual(waiting.explorationStarts, []);
@@ -125,7 +136,7 @@ try {
   assert.ok(restored.pet.growthSeconds >= warmed.pet.growthSeconds);
   assert.deepEqual(errors, []);
   console.log(
-    'PAGES_OK: recursos, cuatro MP3 con reproducción, bienvenida, ficha compacta, guardado v3 y exploración reservada al adulto funcionan bajo /xisverso/.',
+    'PAGES_OK: recursos, cuatro MP3 con reproducción, bienvenida, cocina inmersiva, guardado v3 y exploración bloqueada sin adultos funcionan bajo /xisverso/.',
   );
 } finally {
   await browser?.close();
